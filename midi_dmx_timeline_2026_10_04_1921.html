@@ -1,0 +1,1632 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Timeline Lumières MIDI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout : console d'éclairage — barres d'outils empilées, puis colonne des spots + timeline défilante */
+:root{
+  --bg:#1d2230; --panel:#2B3345; --panel2:#323b50; --line:#414b62; --grid:#2a3142;
+  --fg:#e7eaf1; --muted:#9aa3b6; --accent:#f2b84b; --accent-ink:#2a1f08; --danger:#ef6f6c; --ok:#5cc98a;
+  --f-display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.4 var(--f-body);display:flex;flex-direction:column;padding-inline:16px;padding-block:12px;gap:10px}
+h1{font:600 24px/1 var(--f-display);letter-spacing:.02em;margin:0;text-transform:uppercase}
+h1 span{color:var(--accent)}
+.bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:8px 12px}
+.grp{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.lbl{font:600 11px/1 var(--f-body);text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.sep{width:1px;align-self:stretch;background:var(--line)}
+input[type=number],select{background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:4px;padding:4px 6px;font:500 13px var(--f-mono);font-variant-numeric:tabular-nums}
+input[type=number]{width:70px}
+input.narrow{width:52px}
+input[type=range]{accent-color:var(--accent);width:110px}
+input[type=color]{width:34px;height:28px;padding:0;border:1px solid var(--line);border-radius:4px;background:none;cursor:pointer}
+button,.btn{background:var(--panel2);color:var(--fg);border:1px solid var(--line);border-radius:4px;padding:5px 10px;font:500 13px var(--f-body);cursor:pointer;white-space:nowrap}
+button:hover,.btn:hover{border-color:var(--muted)}
+button:disabled,input:disabled{opacity:.45;cursor:not-allowed}
+button:focus-visible,.btn:focus-within,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+button.on{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+button.icon{padding:5px 8px;min-width:32px}
+.btn input{display:none}
+.val{font:500 12px var(--f-mono);color:var(--muted);font-variant-numeric:tabular-nums}
+.file{font:500 12px var(--f-mono);color:var(--fg);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#pos{font:500 15px var(--f-mono);font-variant-numeric:tabular-nums;min-width:150px}
+.swatches{display:flex;gap:4px;flex-wrap:wrap}
+.sw{width:30px;height:28px;border-radius:4px;border:1px solid var(--line);cursor:pointer;position:relative;padding:0}
+.sw b{position:absolute;inset:auto 0 0 0;height:3px;background:#fff;opacity:.9;border-radius:0 0 3px 3px}
+.sw.sel{outline:2px solid var(--accent);outline-offset:1px}
+#brushPrev{width:46px;height:28px;border-radius:4px;border:1px solid var(--line)}
+.main{flex:1;min-height:0;display:grid;grid-template-columns:236px minmax(0,1fr);background:var(--panel);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+#labels{border-right:1px solid var(--line);background:var(--panel)}
+.lrow{display:flex;align-items:center;gap:8px;padding:0 8px;border-bottom:1px solid var(--grid)}
+.lrow.head{color:var(--muted);font:600 11px/1 var(--f-body);text-transform:uppercase;letter-spacing:.08em}
+.lamp{width:24px;height:24px;border-radius:50%;border:2px solid var(--line);flex:none;background:#111;transition:background .05s}
+.lname{font:600 18px/1 var(--f-display);letter-spacing:.03em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lmeta{font:400 10.5px/1.2 var(--f-mono);color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ltxt{min-width:0;flex:1;display:flex;flex-direction:column;gap:3px}
+.lrow.off .lname{color:var(--muted);text-decoration:line-through}
+.lclear{background:none;border:none;color:var(--muted);padding:2px 4px;font-size:15px;opacity:.6}
+.lclear:hover{opacity:1;color:var(--danger)}
+#scroller{overflow-x:auto;overflow-y:hidden;position:relative}
+#inner{position:relative}
+#cv{position:sticky;left:0;display:block;touch-action:none}
+.help{font:400 12px/1.5 var(--f-body);color:var(--muted)}
+.help kbd{font:500 11px var(--f-mono);background:var(--panel2);border:1px solid var(--line);border-radius:3px;padding:0 4px;color:var(--fg)}
+#toast{position:fixed;right:16px;bottom:16px;background:var(--panel2);border:1px solid var(--accent);color:var(--fg);padding:8px 14px;border-radius:6px;font-size:13px;max-width:420px}
+.warn{color:var(--danger)}
+.spacer{flex:1}
+#prevWin{position:fixed;z-index:25;right:16px;top:70px;width:640px;height:460px;min-width:320px;min-height:240px;resize:both;overflow:hidden;
+  background:var(--panel);border:1px solid var(--accent);border-radius:8px;box-shadow:0 14px 40px rgba(0,0,0,.55);display:flex;flex-direction:column}
+#prevHead{display:flex;align-items:center;gap:8px;padding:6px 8px 6px 12px;cursor:move;border-bottom:1px solid var(--line);user-select:none}
+#prevHead .pvt{font:600 18px/1 var(--f-display);letter-spacing:.04em;text-transform:uppercase}
+#prevTools{display:flex;flex-direction:column;gap:6px;padding:8px 10px;border-bottom:1px solid var(--line);background:var(--bg)}
+#prevTools .row{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px}
+#prevTools input[type=range]{width:90px}
+#prevBody{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;background:#000}
+#pcv{display:block;touch-action:none}
+.lock{margin-left:auto;background:none;border:1px solid transparent;color:var(--muted);padding:3px 5px;display:flex;align-items:center;border-radius:4px}
+.lock:hover{border-color:var(--line);color:var(--fg)}
+.lock.on{color:var(--accent);border-color:var(--accent);background:none}
+#scroller{cursor:grab}
+#scroller.panning,#scroller.panning #cv{cursor:grabbing!important}
+.transport{gap:12px 18px;padding:10px 14px}
+.tbtn{width:56px;height:48px;font-size:26px;line-height:1;padding:0;border-radius:6px}
+.tbtn.play{width:72px;background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.transport #pos{font-size:22px;min-width:230px}
+.help p{margin:0;line-height:1.5;max-width:70ch}
+.help kbd,.keys kbd{font:500 11px var(--f-mono);background:var(--panel2);border:1px solid var(--line);border-radius:3px;padding:0 4px;color:var(--fg)}
+.keys{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:6px 16px}
+#toast{z-index:40;bottom:96px!important}
+.modal{position:fixed;inset:0;z-index:30;background:rgba(10,12,18,.6);display:flex;align-items:flex-start;justify-content:center;padding:6vh 16px 16px;overflow:auto}
+.mbox{background:var(--panel);border:1px solid var(--line);border-radius:8px;box-shadow:0 20px 50px rgba(0,0,0,.5);width:100%;max-width:980px;padding:14px 16px 16px}
+.mhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.mhead h2{font:600 24px/1 var(--f-display);letter-spacing:.03em;text-transform:uppercase;margin:0}
+.mgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.mgrid section{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:10px 12px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.mgrid section.wide{grid-column:1/-1}
+.mgrid h3{margin:0;font:600 13px/1 var(--f-body);text-transform:uppercase;letter-spacing:.08em;color:var(--accent)}
+.mgrid .row{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px}
+@media (max-width:700px){.mgrid{grid-template-columns:1fr}}
+.seg{display:flex}.seg button{border-radius:0}.seg button:first-child{border-radius:4px 0 0 4px}.seg button:last-child{border-radius:0 4px 4px 0;margin-left:-1px}
+.slot{width:34px;height:28px;padding:0;font:600 13px var(--f-mono);color:#fff;text-shadow:0 0 3px #000,0 0 2px #000}
+.slot.on{outline:2px solid var(--accent);outline-offset:1px;background:inherit}
+.led{width:10px;height:10px;border-radius:50%;background:#3a4359;border:1px solid var(--line);flex:none}
+.led.on{background:var(--ok);box-shadow:0 0 6px var(--ok)}
+#gradBar{width:120px;height:20px;border-radius:4px;border:1px solid var(--line)}
+#pedit{position:fixed;z-index:20;background:var(--panel2);border:1px solid var(--accent);border-radius:6px;padding:10px 12px;box-shadow:0 8px 24px rgba(0,0,0,.45);display:flex;flex-direction:column;gap:8px;width:300px}
+#pedit[hidden]{display:none}
+#pedit .ph{display:flex;align-items:center;justify-content:space-between}
+#pedit .pt{font:600 18px/1 var(--f-display);letter-spacing:.03em}
+#pPrev{width:60px;height:24px;border-radius:4px;border:1px solid var(--line)}
+#pedit .pg{display:grid;grid-template-columns:auto 1fr auto 1fr;gap:6px 8px;align-items:center}
+#pedit .pg label{font:600 11px/1 var(--f-mono);color:var(--muted)}
+#pedit .pg input{width:100%}
+#pedit .pr{display:flex;align-items:center;gap:8px}
+#tip{position:fixed;z-index:10;pointer-events:none;background:var(--panel2);border:1px solid var(--accent);border-radius:6px;padding:8px 10px;font:400 12px/1.45 var(--f-mono);font-variant-numeric:tabular-nums;color:var(--fg);box-shadow:0 6px 18px rgba(0,0,0,.4);min-width:240px}
+#tip .h{font:600 15px/1.2 var(--f-display);letter-spacing:.03em;margin-bottom:2px}
+#tip .t{color:var(--muted);margin-bottom:6px}
+#tip table{border-collapse:collapse}
+#tip td{padding:1px 10px 1px 0;white-space:nowrap}
+#tip td.k{font-weight:500}
+#tip .mut{color:var(--muted)}
+@media (max-width:640px){.main{grid-template-columns:120px minmax(0,1fr)}.lmeta{display:none}.lname{font-size:15px}}
+@media (prefers-reduced-motion:reduce){.lamp{transition:none}}
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <h1>Timeline <span>DMX</span> · MIDI</h1>
+  <div class="sep"></div>
+  <div class="grp"><span class="lbl">Projet</span>
+    <button id="bNew">Nouveau</button>
+    <label class="btn" title="Choisissez le .json du projet ; vous pouvez sélectionner le WAV en même temps">Ouvrir…<input id="fProj" type="file" accept=".json,audio/*,.wav" multiple></label>
+    <button id="bSave">Enregistrer</button>
+    <label class="grp" title="Enregistre le fichier audio dans le .json du projet pour qu'il se recharge tout seul"><input id="iEmbed" type="checkbox" checked><span class="lbl">Inclure l'audio</span></label></div>
+  <span class="spacer"></span>
+  <button id="bPreview" title="Fenêtre d'aperçu du show sur une photo de la scène">Aperçu</button>
+  <button id="bHelp" title="Mode d'emploi et raccourcis clavier">Aide</button>
+  <button id="bConfig" class="primary" title="Config spots, MIDI, audio, paramètres de piste, sortie live">⚙ Configuration</button>
+</div>
+
+<div id="cfgModal" class="modal" hidden>
+ <div class="mbox" role="dialog" aria-modal="true" aria-labelledby="cfgTitle">
+  <div class="mhead"><h2 id="cfgTitle">Configuration</h2><button id="bCfgClose" class="icon" title="Fermer (Échap)">×</button></div>
+  <div class="mgrid">
+   <section>
+    <h3>Config spots</h3>
+    <div class="row">
+     <label class="btn">Charger…<input id="fCfg" type="file" accept=".json,.txt,application/json,text/plain"></label>
+     <button id="bSaveCfg" title="Enregistre la config, presets modifiés compris">Enregistrer</button>
+     <span id="cfgName" class="file"></span></div>
+   </section>
+   <section>
+    <h3>MIDI</h3>
+    <div class="row">
+     <label class="btn" title="Remplit les pistes à partir d'un .mid existant, selon la config de spots active">Importer .mid…<input id="fMidi" type="file" accept=".mid,.midi,audio/midi"></label>
+     <button id="bExport" class="primary">Exporter MIDI (.mid)</button></div>
+   </section>
+   <section class="wide">
+    <h3>Audio</h3>
+    <div class="row">
+     <label class="btn">Importer WAV…<input id="fWav" type="file" accept="audio/*,.wav"></label>
+     <span id="wavName" class="file">aucun fichier</span>
+     <span id="audioLockNote" class="val" hidden>calage verrouillé (cadenas à côté de « Audio » dans la timeline)</span></div>
+    <div class="row">
+     <div class="grp"><span class="lbl">Décalage</span>
+      <button class="icon" data-nudge="-10">−</button>
+      <input id="iOff" type="number" step="1" value="0"><span class="val">ms</span>
+      <button class="icon" data-nudge="10">+</button></div>
+     <div class="grp"><span class="lbl">Étirement</span><input id="iRate" type="number" min="50" max="200" step="0.01" value="100"><span class="val">%</span></div>
+     <button id="bFitBars">Mesures = durée du WAV</button></div>
+   </section>
+   <section class="wide">
+    <h3>Paramètres de la piste MIDI</h3>
+    <div class="row">
+     <div class="grp"><span class="lbl">Tempo</span><input id="iBpm" type="number" min="20" max="400" step="0.1" value="120"><span class="val">BPM</span></div>
+     <div class="grp"><span class="lbl">Signature</span><input id="iNum" class="narrow" type="number" min="1" max="32" value="4"><span class="val">/</span>
+      <select id="iDen"><option>2</option><option selected>4</option><option>8</option><option>16</option></select></div>
+     <div class="grp"><span class="lbl">Subdivision</span><select id="iSub"></select></div>
+     <div class="grp"><span class="lbl">Mesures</span><input id="iBars" class="narrow" type="number" min="1" max="2000" value="16"></div></div>
+    <div class="row">
+     <div class="grp"><span class="lbl">Canal MIDI</span><input id="iCh" class="narrow" type="number" min="1" max="16" value="1"></div>
+     <div class="grp"><span class="lbl">Changement de valeur</span><select id="iLegato" title="Comment une note change de vélocité">
+      <option value="1">enchaîné : nouvelle note-on sans coupure</option><option value="0">coupé : note-off puis note-on</option></select></div>
+     <div class="grp"><span class="lbl">Octaves</span><select id="iOct"><option value="-1">C-1 = 0 (C4 = 60)</option><option value="-2">C-2 = 0 (C3 = 60)</option></select></div></div>
+   </section>
+   <section class="wide">
+    <h3>Sortie MIDI live</h3>
+    <div class="row">
+     <div class="grp"><span id="midiLed" class="led" title="Activité MIDI"></span>
+      <select id="iMidiOut" title="Port MIDI qui reçoit la lecture en direct"><option value="">— aucune —</option></select>
+      <button id="bMidiScan" class="icon" title="Détecter les ports MIDI">⟳</button></div>
+     <div class="grp"><span class="lbl">Canal</span><select id="iLiveCh" title="Canal MIDI utilisé pour la lecture en direct"></select></div>
+     <button id="bMidiTest" title="Allume le premier spot actif pendant 1 s sur le canal choisi">Tester</button>
+     <div class="grp"><span class="lbl">Décalage MIDI</span><input id="iMidiLat" class="narrow" type="number" step="1" value="0"><span class="val">ms</span></div></div>
+    <div class="row">
+     <label class="grp" title="À l'arrêt, envoie en continu l'état de la case sous le curseur de lecture (et suit vos modifications)"><input id="iMidiFollow" type="checkbox"><span class="lbl">Envoyer à l'arrêt</span></label>
+     <button id="bBlackout" title="Coupe toutes les notes sur les 16 canaux">Noir (tout off)</button>
+     <span id="midiInfo" class="val"></span>
+     <span id="midiMon" class="val" title="Dernier message envoyé"></span></div>
+   </section>
+  </div>
+ </div>
+</div>
+
+<div class="bar">
+  <div class="grp">
+    <button id="tPaint" class="on" title="Pinceau (B)">Pinceau</button>
+    <button id="tErase" title="Gomme (E)">Gomme</button>
+    <button id="tSel" title="Sélection (S)">Sélection</button>
+    <button id="tInfo" class="icon" title="Lire le code d'une case (I)">?</button>
+  </div>
+  <div class="sep"></div>
+  <div class="grp"><span class="lbl">Presets</span><div id="presets" class="swatches"></div></div>
+  <div class="grp"><span class="lbl">Couleur</span>
+    <div class="seg"><button id="mSolid" class="on" title="Couleur unie">Uni</button><button id="mGrad" title="Dégradé entre deux couleurs">Dégradé</button></div>
+    <div id="gradBox" class="grp" hidden>
+      <button id="g1" class="slot on" title="Couleur 1 (début du coup de pinceau)" aria-label="Couleur 1"></button>
+      <div id="gradBar" title="Aperçu du dégradé"></div>
+      <button id="g2" class="slot" title="Couleur 2 (fin du coup de pinceau)" aria-label="Couleur 2"></button>
+      <button id="gSwap" class="icon" title="Inverser les deux couleurs">⇄</button>
+      <span class="lbl">Pas</span><select id="iGradSub" title="Durée de chaque palier du dégradé (moins de paliers = moins de messages MIDI)">
+        <option value="grid">grille</option><option value="bar">1 mesure</option><option value="2">1/2</option><option value="4">1/4</option>
+        <option value="8" selected>1/8</option><option value="8T">1/8 triolet</option><option value="16">1/16</option><option value="32">1/32</option></select>
+    </div>
+    <input id="iColor" type="color" value="#ffffff"><div id="brushPrev"></div></div>
+  <div class="grp"><span class="lbl">Dimmer</span><input id="iDim" type="range" min="0" max="255" value="255"><span id="brushVal" class="val"></span></div>
+  <div class="sep"></div>
+  <div class="grp" id="selOps">
+    <button id="bCopy" title="Copier (Ctrl+C)">Copier</button>
+    <button id="bCut" title="Couper (Ctrl+X)">Couper</button>
+    <button id="bPaste" title="Coller au dernier clic (Ctrl+V)">Coller</button>
+    <button id="bDup" title="Dupliquer à la suite (Ctrl+D)">Dupliquer</button>
+    <button id="bDel" title="Supprimer (Suppr)">Suppr.</button>
+  </div>
+  <div class="grp">
+    <button id="bUndo" title="Annuler (Ctrl+Z)">Annuler</button>
+    <button id="bClearAll">Tout effacer</button>
+  </div>
+  <div class="sep"></div>
+  <label class="grp"><input id="iShowOff" type="checkbox"><span class="lbl">Spots inactifs</span></label>
+  <div class="grp"><span class="lbl">Zoom</span><input id="iZoom" type="range" min="4" max="64" value="18"></div>
+</div>
+
+<div class="main">
+  <div id="labels"></div>
+  <div id="scroller"><div id="inner"><canvas id="cv"></canvas></div></div>
+</div>
+
+<div class="bar transport">
+  <button id="bHome" class="tbtn" title="Retour au début (Origine)" aria-label="Retour au début">⏮</button>
+  <button id="bPlay" class="tbtn play" title="Lecture / pause (Espace)" aria-label="Lecture / pause">▶</button>
+  <span id="pos">1.1 · 00:00.000</span>
+  <div class="sep"></div>
+  <label class="grp"><input id="iClick" type="checkbox"><span class="lbl">Clic métronome</span></label>
+  <div class="grp"><span class="lbl">Volume</span><input id="iVol" type="range" min="0" max="100" value="80"></div>
+</div>
+
+<div id="prevWin" hidden role="dialog" aria-label="Aperçu du show">
+  <div id="prevHead"><span class="pvt">Aperçu</span><span id="prevInfo" class="val"></span><span class="spacer"></span>
+    <button id="bPrevEdit" title="Placer et régler les faisceaux des spots">Placer les spots</button>
+    <button id="bPrevClose" class="icon" title="Fermer">×</button></div>
+  <div id="prevTools" hidden>
+    <div class="row">
+      <label class="btn">Image de fond…<input id="fPrevImg" type="file" accept="image/*"></label>
+      <button id="bPrevImgDel" title="Retirer l'image de fond">Sans image</button>
+      <div class="grp"><span class="lbl">Ambiance</span><input id="iPrevAmb" type="range" min="0" max="100" value="30" title="Luminosité de la photo hors faisceaux"></div>
+      <div class="grp"><span class="lbl">Halo</span><input id="iPrevHaze" type="range" min="0" max="100" value="35" title="Visibilité du faisceau dans l'air"></div>
+    </div>
+    <div class="row">
+      <div class="grp"><span class="lbl">Spot</span><select id="iPrevSpot"></select></div>
+      <div class="seg"><button id="pvDir" class="on" title="Faisceau : tirer une ligne de la source vers la cible">Directionnel</button><button id="pvOmni" title="Halo autour d'un centre">Omni</button></div>
+      <div class="grp" id="pvAngG"><span class="lbl">Ouverture</span><input id="iPrevAng" type="range" min="2" max="80" value="18"><span id="pvAngV" class="val"></span></div>
+      <div class="grp"><span class="lbl">Intensité</span><input id="iPrevGain" type="range" min="10" max="300" value="100"><span id="pvGainV" class="val"></span></div>
+      <button id="bPrevDel" title="Retirer ce spot de l'aperçu">Retirer</button>
+    </div>
+    <div id="prevHint" class="val"></div>
+  </div>
+  <div id="prevBody"><canvas id="pcv"></canvas></div>
+</div>
+
+<div id="helpModal" class="modal" hidden>
+ <div class="mbox" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+  <div class="mhead"><h2 id="helpTitle">Aide</h2><button id="bHelpClose" class="icon" title="Fermer (Échap)">×</button></div>
+  <div class="mgrid help">
+   <section>
+    <h3>Peindre</h3>
+    <p><b>Pinceau</b> (<kbd>B</kbd>) : clic gauche ou glisser pour peindre la couleur et le dimmer choisis.</p>
+    <p><b>Gomme</b> (<kbd>E</kbd>), clic droit ou <kbd>Alt</kbd> + clic : efface.</p>
+    <p><b>Presets</b> : clic pour prendre la couleur, clic droit pour modifier le preset.</p>
+    <p><b>Dégradé</b> : la couleur 1 est posée au point de départ du geste, la couleur 2 au point d'arrivée. Glisser vers le haut ou le bas couvre plusieurs spots. Le menu <b>Pas</b> fixe la durée de chaque palier.</p>
+   </section>
+   <section>
+    <h3>Sélection (<kbd>S</kbd>)</h3>
+    <p>Glisser pour encadrer une zone, ou cliquer sur une zone colorée pour la sélectionner. <kbd>Maj</kbd> + glisser sélectionne aussi depuis le pinceau.</p>
+    <p>Glisser la sélection pour la déplacer ; avec <kbd>Ctrl</kbd> ou <kbd>Alt</kbd>, elle est copiée.</p>
+    <p>Flèches : décaler d'un pas (<kbd>Maj</kbd> = un temps) ou d'une piste.</p>
+    <p>Le collage se fait au dernier clic (timeline ou règle).</p>
+   </section>
+   <section>
+    <h3>Lire une case (<kbd>I</kbd> ou bouton ?)</h3>
+    <p>Survoler une case affiche ses valeurs DIM R G B, les canaux DMX, les notes et les vélocités, et la durée de la zone. Un clic reprend la couleur dans le pinceau.</p>
+   </section>
+   <section>
+    <h3>Lecture et audio</h3>
+    <p>Cliquer sur la règle place le curseur. <kbd>Espace</kbd> lance ou arrête la lecture.</p>
+    <p>Glisser la forme d'onde décale l'audio (<kbd>Maj</kbd> = aimanté à la grille). Une fois calé, le cadenas à côté de « Audio » le verrouille. Les réglages fins sont dans Configuration › Audio.</p>
+    <p>Glisser sur la règle, sur la forme d'onde verrouillée ou sous les pistes fait défiler la timeline. Un simple clic sur la règle place le curseur.</p>
+    <p><kbd>Ctrl</kbd> + molette : zoom horizontal.</p>
+   </section>
+   <section class="wide">
+    <h3>Aperçu</h3>
+    <p>Le bouton <b>Aperçu</b> ouvre une fenêtre flottante (déplaçable par son titre, redimensionnable par le coin) qui montre le show sur une photo de la scène, en direct pendant la lecture ou au curseur.</p>
+    <p><b>Placer les spots</b> : charger une image (convertie en noir et blanc), choisir un spot puis, pour un spot <b>directionnel</b>, tirer une ligne de la source vers la zone éclairée ; pour un spot <b>omni</b>, cliquer le centre et tirer le rayon. Les poignées se déplacent ensuite à la souris. Tout est enregistré dans le projet.</p>
+   </section>
+   <section class="wide">
+    <h3>Codage MIDI</h3>
+    <p>Chaque sous-canal (DIM, R, G, B) d'un spot a sa note, définie dans la config. La vélocité vaut la valeur DMX × 127/255 (255 → 127). Une valeur 0 ne produit pas de note.</p>
+    <p>Un sous-canal n'est recodé que lorsque sa valeur change. En mode <b>enchaîné</b>, un changement de valeur envoie une nouvelle note-on sans note-off ; le note-off n'arrive que quand le sous-canal s'éteint.</p>
+   </section>
+   <section class="wide">
+    <h3>Raccourcis clavier</h3>
+    <div class="keys">
+     <span><kbd>Espace</kbd> lecture / pause</span><span><kbd>Origine</kbd> retour au début</span>
+     <span><kbd>B</kbd> pinceau</span><span><kbd>E</kbd> gomme</span><span><kbd>S</kbd> sélection</span><span><kbd>I</kbd> lire une case</span>
+     <span><kbd>Ctrl+Z</kbd> annuler</span><span><kbd>Ctrl+C</kbd> copier</span><span><kbd>Ctrl+X</kbd> couper</span><span><kbd>Ctrl+V</kbd> coller</span>
+     <span><kbd>Ctrl+D</kbd> dupliquer</span><span><kbd>Ctrl+A</kbd> tout sélectionner</span><span><kbd>Suppr</kbd> effacer la sélection</span><span><kbd>Échap</kbd> désélectionner / fermer</span>
+    </div>
+   </section>
+  </div>
+ </div>
+</div>
+<div id="toast" hidden></div>
+<div id="tip" hidden></div>
+<div id="pedit" hidden role="dialog" aria-label="Modifier le preset">
+  <div class="ph"><span id="pedTitle" class="pt">Preset</span><div id="pPrev"></div></div>
+  <div class="pg">
+    <label for="pD">DIM</label><input id="pD" type="number" min="0" max="255">
+    <label for="pR">R</label><input id="pR" type="number" min="0" max="255">
+    <label for="pG">G</label><input id="pG" type="number" min="0" max="255">
+    <label for="pB">B</label><input id="pB" type="number" min="0" max="255">
+  </div>
+  <div class="pr"><input id="pColor" type="color" title="Choisir R G B"><span id="pVel" class="val"></span></div>
+  <div class="pr"><button id="pFromBrush">Prendre le pinceau</button><span style="flex:1"></span><button id="pCancel">Annuler</button><button id="pOk" class="primary">OK</button></div>
+</div>
+
+<script>
+"use strict";
+const DEFAULT_CONFIG = {"spot_names": ["JL W 1", "JL AMB", "JL W 2", "SPOT 4", "SPOT 5", "SPOT 6", "NOEL", "GREG", "LORENE"], "spot_channels": [1, 11, 21, 31, 41, 51, 31, 41, 51], "spot_enabled": [true, true, true, false, false, false, true, true, true], "ch_offsets": [[0, 5, 5, 5, 4], [0, 1, 2, 3, 4], [0, 5, 5, 5, 4], [0, 1, 2, 3, 4], [0, 1, 2, 3, 4], [0, 1, 2, 3, 4], [0, 1, 2, 3, 4], [0, 1, 2, 3, 4], [0, 1, 2, 3, 4]], "midi_map": [["C-1", "", "", "", ""], ["D#-1", "E-1", "F-1", "F#-1", ""], ["G#-1", " ", "", "", ""], ["D#0", "E0", "F0", "F#0", "G0"], ["G#0", "A0", "A#0", "B0", "C1"], ["C#1", "D1", "D#1", "E1", "F1"], ["F#1", "G1", "G#1", "A1", ""], ["B1", "C2", "C#2", "D2", ""], ["E2", "F2", "F#2", "G2", ""]], "presets": [[0, 0, 0, 0], [13, 255, 255, 255, 0], [255, 255, 255, 255], [255, 255, 0, 0], [255, 0, 255, 0], [255, 0, 0, 255], [255, 255, 130, 0], [255, 180, 0, 255], [255, 255, 0, 0, 0]], "bypass_dimmer": false};
+const SUBDIVS = {"4":{q:1,l:"1/4"},"8":{q:.5,l:"1/8"},"8T":{q:1/3,l:"1/8 triolet"},"16":{q:.25,l:"1/16"},"16T":{q:1/6,l:"1/16 triolet"},"32":{q:.125,l:"1/32"}};
+const PPQ = 480, RULER_H = 26, WAVE_H = 72, LANE_H = 46, STORE = "midiDmxTimeline.v1";
+const PC = {C:0,D:2,E:4,F:5,G:7,A:9,B:11};
+const NAMES = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+const $ = id => document.getElementById(id);
+
+const S = {
+  cfg:null, cfgName:"", spots:[], presets:[],
+  bpm:120, num:4, den:4, sub:"16", bars:16, midiCh:1, octBase:-1, showDisabled:false, zoom:18,
+  cells:[], wav:null, peaks:null, wavName:"", offset:0, rate:1, vol:.8, click:false,
+  brush:{d:255,r:255,g:255,b:255}, tool:"paint", audioLock:false, gradSub:"8", legato:true, gradMode:false, grad:[{d:255,r:255,g:255,b:255},{d:0,r:255,g:255,b:255}], gradSlot:0, pos:0, playing:false, sel:null, clip:null
+};
+
+/* ---------- Grille musicale ---------- */
+const stepQ = () => SUBDIVS[S.sub].q;
+const barQ = () => S.num * 4 / S.den;
+const secPerQ = () => 60 / S.bpm;
+const stepSec = () => stepQ() * secPerQ();
+const totalSteps = () => Math.max(1, Math.floor(S.bars * barQ() / stepQ() + 1e-9));
+const totalSec = () => S.bars * barQ() * secPerQ();
+
+function noteNum(n){
+  if (typeof n === "number") return n >= 0 && n <= 127 ? n : null;
+  const m = /^([A-Ga-g])([#b]?)(-?\d+)$/.exec(String(n || "").trim());
+  if (!m) return null;
+  const v = PC[m[1].toUpperCase()] + (m[2] === "#" ? 1 : m[2] === "b" ? -1 : 0) + (parseInt(m[3], 10) - S.octBase) * 12;
+  return v >= 0 && v <= 127 ? v : null;
+}
+const noteName = v => NAMES[v % 12] + (Math.floor(v / 12) + S.octBase);
+const spotNotes = sp => [0,1,2,3].map(k => noteNum(sp.map[k]));
+const hasRGB = sp => spotNotes(sp).slice(1).some(n => n != null);
+
+function applyConfig(c, name){
+  if (!c || !Array.isArray(c.spot_names)) throw new Error("le fichier ne contient pas de liste spot_names");
+  S.cfg = c; S.cfgName = name || "";
+  S.spots = c.spot_names.map((nm, i) => ({
+    i, name: String(nm), enabled: c.spot_enabled ? !!c.spot_enabled[i] : true,
+    ch: (c.spot_channels || [])[i] ?? 1, offs: (c.ch_offsets || [])[i] || [0,1,2,3,4],
+    map: ((c.midi_map || [])[i] || []).map(x => typeof x === "string" ? x.trim() : x)
+  }));
+  S.presets = (c.presets || []).map((p, src) => Array.isArray(p) && p.length >= 4 ? {d:p[0]|0, r:p[1]|0, g:p[2]|0, b:p[3]|0, src} : null).filter(Boolean);
+  S.cells.length = Math.max(S.cells.length, S.spots.length);
+  for (let i = 0; i < S.spots.length; i++) if (!S.cells[i]) S.cells[i] = [];
+  S.cells.length = S.spots.length;
+  ensureCells();
+}
+function ensureCells(){
+  const n = totalSteps();
+  S.cells = S.cells.map(a => { a = a || []; if (a.length > n) a = a.slice(0, n); while (a.length < n) a.push(null); return a; });
+}
+const visSpots = () => S.spots.filter(sp => sp.enabled || S.showDisabled);
+
+/* ---------- Valeurs et couleurs ---------- */
+const sameVal = (a, b) => a === b || (!!a && !!b && a.d === b.d && a.r === b.r && a.g === b.g && a.b === b.b);
+function cellFor(sp, v){
+  if (!v) return null;
+  const n = spotNotes(sp), vals = [v.d, v.r, v.g, v.b];
+  const any = n.some((x, k) => x != null && vals[k] > 0);
+  return any ? {d:v.d, r:v.r, g:v.g, b:v.b} : null;
+}
+function cellCss(sp, c, alpha){
+  if (!c) return null;
+  const a = alpha ?? 1;
+  if (!hasRGB(sp)) { const k = c.d / 255; return `rgba(${Math.round(250*k+40*(1-k))},${Math.round(240*k+40*(1-k))},${Math.round(215*k+40*(1-k))},${a})`; }
+  return `rgba(${c.r},${c.g},${c.b},${a})`;
+}
+function lampCss(sp, c){
+  if (!c) return "#111";
+  const dim = spotNotes(sp)[0] != null ? c.d / 255 : 1;
+  if (!hasRGB(sp)) { const v = Math.round(255 * dim); return `rgb(${v},${Math.round(v*.95)},${Math.round(v*.85)})`; }
+  return `rgb(${Math.round(c.r*dim)},${Math.round(c.g*dim)},${Math.round(c.b*dim)})`;
+}
+const hex2 = n => n.toString(16).padStart(2, "0");
+const vel = v => v <= 0 ? 0 : Math.max(1, Math.min(127, Math.round(v * 127 / 255)));
+
+/* ---------- Interface : réglages ---------- */
+for (const [k, v] of Object.entries(SUBDIVS)) { const o = document.createElement("option"); o.value = k; o.textContent = v.l; $("iSub").append(o); }
+
+function syncInputs(){
+  $("iBpm").value = S.bpm; $("iNum").value = S.num; $("iDen").value = S.den; $("iSub").value = S.sub;
+  $("iBars").value = S.bars; $("iCh").value = S.midiCh; if ($("iLiveCh").options.length) fillLiveCh(); $("iOct").value = S.octBase;
+  $("iOff").value = Math.round(S.offset * 1000); $("iRate").value = +(S.rate * 100).toFixed(2);
+  $("iVol").value = Math.round(S.vol * 100); $("iClick").checked = S.click; $("iShowOff").checked = S.showDisabled;
+  $("iZoom").value = S.zoom; $("iGradSub").value = S.gradSub; $("iLegato").value = S.legato ? "1" : "0"; $("cfgName").textContent = S.cfgName || "config intégrée";
+  $("wavName").textContent = S.wav ? `${S.wavName} · ${fmtTime(S.wav.duration)}` : (S.wavName ? `${S.wavName} (à recharger)` : "aucun fichier");
+  syncBrush(); updSummary(); syncLock();
+}
+const rgbCss = c => (c.r + c.g + c.b) ? `rgb(${Math.round(c.r * (.25 + .75 * c.d / 255))},${Math.round(c.g * (.25 + .75 * c.d / 255))},${Math.round(c.b * (.25 + .75 * c.d / 255))})` : "#111";
+const lerpVal = (a, b, t) => ({d:Math.round(a.d + (b.d - a.d) * t), r:Math.round(a.r + (b.r - a.r) * t), g:Math.round(a.g + (b.g - a.g) * t), b:Math.round(a.b + (b.b - a.b) * t)});
+function syncBrush(){
+  const b = S.brush;
+  if (S.gradMode) S.grad[S.gradSlot] = {d:b.d, r:b.r, g:b.g, b:b.b};
+  $("mSolid").classList.toggle("on", !S.gradMode); $("mGrad").classList.toggle("on", S.gradMode); $("gradBox").hidden = !S.gradMode;
+  [0, 1].forEach(k => { const el = $("g" + (k + 1)), c = S.grad[k]; el.style.background = rgbCss(c); el.classList.toggle("on", k === S.gradSlot);
+    el.title = `Couleur ${k + 1} (${k ? "fin" : "début"} du coup de pinceau) : DIM ${c.d} R ${c.r} G ${c.g} B ${c.b}`; });
+  $("gradBar").style.background = `linear-gradient(90deg, ${[0, .25, .5, .75, 1].map(t => rgbCss(lerpVal(S.grad[0], S.grad[1], t))).join(",")})`;
+  $("iColor").value = "#" + hex2(b.r) + hex2(b.g) + hex2(b.b);
+  $("iDim").value = b.d;
+  $("brushPrev").style.background = `rgb(${b.r},${b.g},${b.b})`;
+  $("brushPrev").style.opacity = .25 + .75 * b.d / 255;
+  $("brushVal").textContent = `DIM ${b.d} R ${b.r} G ${b.g} B ${b.b} → vél. ${vel(b.d)}/${vel(b.r)}/${vel(b.g)}/${vel(b.b)}`;
+  document.querySelectorAll(".sw").forEach(el => el.classList.toggle("sel", sameVal(S.presets[+el.dataset.i], b)));
+}
+function buildPresets(){
+  const box = $("presets"); box.textContent = "";
+  S.presets.forEach((p, i) => {
+    const el = document.createElement("button"); el.className = "sw"; el.dataset.i = i;
+    el.title = `Preset ${i+1} : DIM ${p.d} R ${p.r} G ${p.g} B ${p.b} (clic droit : modifier)`;
+    el.style.background = (p.r + p.g + p.b) ? `rgb(${p.r},${p.g},${p.b})` : "repeating-linear-gradient(45deg,#222 0 4px,#333 4px 8px)";
+    const bar = document.createElement("b"); bar.style.width = (p.d / 2.55) + "%"; el.append(bar);
+    el.onclick = () => { S.brush = {d:p.d, r:p.r, g:p.g, b:p.b}; setTool("paint"); syncBrush(); };
+    el.oncontextmenu = e => { e.preventDefault(); openPresetEditor(i, el); };
+    box.append(el);
+  });
+}
+/* ---------- Édition d'un preset (clic droit) ---------- */
+let pedIdx = -1;
+function openPresetEditor(i, el){
+  const p = S.presets[i], ed = $("pedit"); pedIdx = i;
+  $("pedTitle").textContent = `Preset ${i + 1}`;
+  $("pD").value = p.d; $("pR").value = p.r; $("pG").value = p.g; $("pB").value = p.b;
+  pedSync(); ed.hidden = false;
+  const r = el.getBoundingClientRect(), w = ed.offsetWidth;
+  ed.style.left = Math.max(8, Math.min(window.innerWidth - w - 8, r.left)) + "px";
+  ed.style.top = (r.bottom + 6) + "px";
+  $("pD").focus(); $("pD").select();
+}
+const pedVals = () => ["pD", "pR", "pG", "pB"].map(id => { const v = parseInt($(id).value, 10); return isFinite(v) ? Math.max(0, Math.min(255, v)) : 0; });
+function pedSync(){
+  const [d, r, g, b] = pedVals();
+  $("pColor").value = "#" + hex2(r) + hex2(g) + hex2(b);
+  $("pPrev").style.background = (r + g + b) ? `rgb(${r},${g},${b})` : "repeating-linear-gradient(45deg,#222 0 4px,#333 4px 8px)";
+  $("pPrev").style.opacity = .25 + .75 * d / 255;
+  $("pVel").textContent = `vél. ${vel(d)} / ${vel(r)} / ${vel(g)} / ${vel(b)}`;
+}
+function closePresetEditor(){ $("pedit").hidden = true; pedIdx = -1; }
+function applyPresetEditor(){
+  if (pedIdx < 0) return;
+  const [d, r, g, b] = pedVals(), old = S.presets[pedIdx];
+  const wasBrush = sameVal(old, S.brush);
+  S.presets[pedIdx] = {d, r, g, b, src: old.src};
+  // écrit aussi dans la config (le 5e champ « spécial » éventuel est conservé)
+  if (S.cfg && Array.isArray(S.cfg.presets) && Array.isArray(S.cfg.presets[old.src])) {
+    const arr = S.cfg.presets[old.src].slice(); arr[0] = d; arr[1] = r; arr[2] = g; arr[3] = b; S.cfg.presets[old.src] = arr;
+  }
+  if (wasBrush) S.brush = {d, r, g, b};
+  const n = pedIdx + 1;
+  closePresetEditor(); buildPresets(); syncBrush(); autosave();
+  toast(`Preset ${n} modifié : DIM ${d} R ${r} G ${g} B ${b}. Les zones déjà peintes ne changent pas.`);
+}
+["pD", "pR", "pG", "pB"].forEach(id => $(id).addEventListener("input", pedSync));
+$("pColor").addEventListener("input", () => { const h = $("pColor").value;
+  $("pR").value = parseInt(h.slice(1, 3), 16); $("pG").value = parseInt(h.slice(3, 5), 16); $("pB").value = parseInt(h.slice(5, 7), 16); pedSync(); });
+$("pFromBrush").onclick = () => { const b = S.brush; $("pD").value = b.d; $("pR").value = b.r; $("pG").value = b.g; $("pB").value = b.b; pedSync(); };
+$("pOk").onclick = applyPresetEditor;
+$("pCancel").onclick = closePresetEditor;
+$("pedit").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); applyPresetEditor(); } else if (e.key === "Escape") closePresetEditor(); e.stopPropagation(); });
+document.addEventListener("pointerdown", e => { if (!$("pedit").hidden && !$("pedit").contains(e.target) && !e.target.closest(".sw")) closePresetEditor(); });
+
+function buildLabels(){
+  const box = $("labels"); box.textContent = "";
+  const h1 = document.createElement("div"); h1.className = "lrow head"; h1.style.height = RULER_H + "px"; h1.textContent = "Mesures"; box.append(h1);
+  const h2 = document.createElement("div"); h2.className = "lrow head"; h2.style.height = WAVE_H + "px";
+  const al = document.createElement("span"); al.textContent = "Audio";
+  const lk = document.createElement("button"); lk.id = "bLock"; lk.className = "lock" + (S.audioLock ? " on" : "");
+  lk.title = S.audioLock ? "Audio verrouillé : cliquer pour le déverrouiller" : "Verrouiller le calage de l'audio";
+  lk.setAttribute("aria-pressed", S.audioLock ? "true" : "false");
+  lk.innerHTML = S.audioLock ? `<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><rect x="3" y="7" width="10" height="7" rx="1.5" fill="currentColor"/><path d="M5 7V5a3 3 0 0 1 6 0v2" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>` : `<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><rect x="3" y="7" width="10" height="7" rx="1.5" fill="currentColor"/><path d="M5 7V5a3 3 0 0 1 5.8-1" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>`;
+  lk.onclick = () => { S.audioLock = !S.audioLock; buildLabels(); syncLock(); draw(); updateLamps(); autosave();
+    toast(S.audioLock ? "Audio verrouillé : la forme d'onde sert maintenant à faire défiler la timeline." : "Audio déverrouillé : glisser la forme d'onde la décale."); };
+  h2.append(al, lk); box.append(h2);
+  for (const sp of visSpots()) {
+    const row = document.createElement("div"); row.className = "lrow" + (sp.enabled ? "" : " off"); row.style.height = LANE_H + "px";
+    const lamp = document.createElement("div"); lamp.className = "lamp"; lamp.id = "lamp" + sp.i;
+    const t = document.createElement("div"); t.className = "ltxt";
+    const nm = document.createElement("div"); nm.className = "lname"; nm.textContent = sp.name;
+    const notes = spotNotes(sp), offs = sp.offs.slice(0, 4).map(o => sp.ch + o);
+    const meta = document.createElement("div"); meta.className = "lmeta";
+    meta.textContent = `DMX ${Math.min(...offs)}–${Math.max(...sp.offs.map(o => sp.ch + o))} · ` +
+      ["D","R","G","B"].map((k, j) => notes[j] != null ? k + ":" + noteName(notes[j]) : null).filter(Boolean).join(" ");
+    meta.title = meta.textContent;
+    t.append(nm, meta);
+    const cl = document.createElement("button"); cl.className = "lclear"; cl.title = "Vider cette piste"; cl.textContent = "×";
+    cl.onclick = () => { pushUndo(); S.cells[sp.i] = S.cells[sp.i].map(() => null); changed(); };
+    row.append(lamp, t, cl); box.append(row);
+  }
+}
+
+/* ---------- Canevas ---------- */
+const cv = $("cv"), cx = cv.getContext("2d"), sc = $("scroller"), inner = $("inner");
+let hover = null, drag = null;
+
+function layout(){
+  const H = RULER_H + WAVE_H + visSpots().length * LANE_H;
+  const W = sc.clientWidth, dpr = window.devicePixelRatio || 1;
+  inner.style.width = Math.max(W, totalSteps() * S.zoom + 40) + "px";
+  inner.style.height = H + "px";
+  cv.style.width = W + "px"; cv.style.height = H + "px";
+  cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+  cx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  draw();
+}
+const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+let COL = {};
+function readColors(){ for (const k of ["bg","panel","panel2","line","grid","fg","muted","accent","danger"]) COL[k] = css("--" + k); }
+
+function qToX(q){ return q / stepQ() * S.zoom - sc.scrollLeft; }
+function secToX(t){ return t / stepSec() * S.zoom - sc.scrollLeft; }
+function xToSec(x){ return (x + sc.scrollLeft) / S.zoom * stepSec(); }
+function xToStep(x){ return Math.floor((x + sc.scrollLeft) / S.zoom); }
+function laneAt(y){ const k = Math.floor((y - RULER_H - WAVE_H) / LANE_H); return k; }
+
+function draw(){
+  const W = cv.clientWidth, H = cv.clientHeight, lanes = visSpots(), sl = sc.scrollLeft, z = S.zoom;
+  const nSteps = totalSteps(), s0 = Math.max(0, Math.floor(sl / z)), s1 = Math.min(nSteps, Math.ceil((sl + W) / z));
+  const endX = nSteps * z - sl, yL = RULER_H + WAVE_H;
+  cx.fillStyle = COL.bg; cx.fillRect(0, 0, W, H);
+
+  // fonds des pistes
+  lanes.forEach((sp, k) => { cx.fillStyle = k % 2 ? COL.panel : "#262d3d"; cx.fillRect(0, yL + k * LANE_H, Math.min(W, endX), LANE_H); });
+  cx.fillStyle = "#1a1f2b"; cx.fillRect(0, RULER_H, Math.min(W, endX), WAVE_H);
+
+  // lignes de grille
+  const beatQ = 4 / S.den;
+  if (z >= 7) { cx.fillStyle = COL.grid; for (let s = s0; s <= s1; s++) cx.fillRect(Math.round(s * z - sl), yL, 1, H - yL); }
+  const q0 = sl / z * stepQ(), q1 = (sl + W) / z * stepQ();
+  cx.fillStyle = "#3a4359";
+  for (let b = Math.floor(q0 / beatQ); b * beatQ <= q1; b++) { const x = Math.round(qToX(b * beatQ)); if (x >= 0 && x <= endX) cx.fillRect(x, RULER_H + 14, 1, H - RULER_H - 14); }
+  const barW = barQ() / stepQ() * z, every = barW >= 34 ? 1 : barW >= 17 ? 2 : barW >= 8 ? 4 : 8;
+  cx.font = "500 11px " + css("--f-mono"); cx.textBaseline = "middle";
+  for (let b = Math.max(0, Math.floor(q0 / barQ())); b <= S.bars && b * barQ() <= q1; b++) {
+    const x = Math.round(qToX(b * barQ()));
+    cx.fillStyle = "#56607a"; cx.fillRect(x, 0, 1, H);
+    if (b < S.bars && b % every === 0) { cx.fillStyle = COL.fg; cx.fillText(String(b + 1), x + 4, RULER_H / 2); }
+  }
+  cx.fillStyle = COL.line; cx.fillRect(0, RULER_H - 1, W, 1); cx.fillRect(0, yL - 1, W, 1);
+  for (let k = 1; k <= lanes.length; k++) cx.fillRect(0, yL + k * LANE_H - 1, W, 1);
+
+  // forme d'onde
+  drawWave(W, endX);
+
+  // cellules peintes (fusion des valeurs identiques)
+  lanes.forEach((sp, k) => {
+    const a = S.cells[sp.i], y = yL + k * LANE_H, inner = LANE_H - 8;
+    let s = s0;
+    while (s < s1) {
+      const c = a[s]; let e = s + 1;
+      while (e < s1 && sameVal(a[e], c)) e++;
+      if (c) {
+        const x0 = s * z - sl, w = (e - s) * z;
+        const h = spotNotes(sp)[0] != null ? Math.max(4, Math.round(c.d / 255 * inner)) : inner;
+        cx.fillStyle = cellCss(sp, c, .28); cx.fillRect(x0 + 1, y + 4, w - 1, inner);
+        cx.fillStyle = cellCss(sp, c, 1); cx.fillRect(x0 + 1, y + 4 + inner - h, w - 1, h);
+        cx.fillStyle = "rgba(0,0,0,.45)"; cx.fillRect(x0, y + 4, 1, inner);
+      }
+      s = e;
+    }
+  });
+
+  // survol
+  if (hover && hover.lane >= 0 && hover.lane < lanes.length && !drag && hover.step < nSteps) {
+    cx.strokeStyle = COL.accent; cx.lineWidth = 1;
+    cx.strokeRect(hover.step * z - sl + .5, yL + hover.lane * LANE_H + 3.5, z - 1, LANE_H - 7);
+  }
+  // sélection
+  if (S.sel) {
+    const a = S.sel, x = a.s0 * z - sl, w = (a.s1 - a.s0 + 1) * z, y = yL + a.l0 * LANE_H, h = (a.l1 - a.l0 + 1) * LANE_H;
+    cx.fillStyle = "rgba(242,184,75,.12)"; cx.fillRect(x, y, w, h);
+    cx.setLineDash([5, 4]); cx.strokeStyle = COL.accent; cx.lineWidth = 1.5; cx.strokeRect(x + .5, y + .5, w - 1, h - 1); cx.setLineDash([]);
+  }
+  // fin de morceau
+  if (endX < W) { cx.fillStyle = "rgba(0,0,0,.35)"; cx.fillRect(endX, 0, W - endX, H); }
+  // tête de lecture
+  const px = secToX(S.pos);
+  if (px >= -2 && px <= W + 2) {
+    cx.fillStyle = COL.accent; cx.fillRect(Math.round(px) - 1, 0, 2, H);
+    cx.beginPath(); cx.moveTo(px - 6, 0); cx.lineTo(px + 6, 0); cx.lineTo(px, 8); cx.fill();
+  }
+}
+
+function drawWave(W, endX){
+  const y0 = RULER_H, mid = y0 + WAVE_H / 2, amp = WAVE_H / 2 - 6;
+  if (!S.wav || !S.peaks) {
+    cx.fillStyle = COL.muted; cx.font = "400 12px " + css("--f-body"); cx.textBaseline = "middle";
+    cx.fillText("Chargez un WAV pour le caler sur la grille", 10, mid);
+    return;
+  }
+  const {mn, mx, bin} = S.peaks, sr = S.wav.sampleRate, nb = mn.length;
+  cx.fillStyle = "#7f9ccf";
+  for (let x = 0; x < Math.min(W, endX + 400); x++) {
+    const a0 = (xToSec(x) - S.offset) * S.rate * sr / bin, a1 = (xToSec(x + 1) - S.offset) * S.rate * sr / bin;
+    if (a1 < 0 || a0 >= nb) continue;
+    let lo = 1, hi = -1;
+    const i0 = Math.max(0, Math.floor(a0)), i1 = Math.min(nb - 1, Math.max(i0, Math.ceil(a1) - 1));
+    for (let i = i0; i <= i1; i++) { if (mn[i] < lo) lo = mn[i]; if (mx[i] > hi) hi = mx[i]; }
+    if (hi < lo) continue;
+    cx.fillRect(x, mid - hi * amp, 1, Math.max(1, (hi - lo) * amp));
+  }
+  const xo = secToX(S.offset);
+  if (xo >= 0 && xo <= W) { cx.fillStyle = COL.accent; cx.fillRect(Math.round(xo), y0, 1, WAVE_H); cx.font = "500 10px " + css("--f-mono"); cx.textBaseline = "top"; cx.fillText(S.audioLock ? "début WAV · verrouillé" : "début WAV", xo + 4, y0 + 3); }
+}
+
+function computePeaks(buf){
+  const bin = 256, n = buf.length, nb = Math.ceil(n / bin), mn = new Float32Array(nb), mx = new Float32Array(nb);
+  const chs = []; for (let c = 0; c < buf.numberOfChannels; c++) chs.push(buf.getChannelData(c));
+  for (let b = 0; b < nb; b++) {
+    let lo = 1, hi = -1; const e = Math.min(n, (b + 1) * bin);
+    for (let i = b * bin; i < e; i++) { let v = 0; for (const d of chs) v += d[i]; v /= chs.length; if (v < lo) lo = v; if (v > hi) hi = v; }
+    mn[b] = lo; mx[b] = hi;
+  }
+  return {mn, mx, bin};
+}
+
+/* ---------- Peinture ---------- */
+let undo = [];
+function pushUndo(){ undo.push(S.cells.map(a => a.slice())); if (undo.length > 60) undo.shift(); }
+function doUndo(){ if (!undo.length) return toast("Rien à annuler."); S.cells = undo.pop(); ensureCells(); changed(); }
+
+function paint(step, lane, erase){
+  const sp = visSpots()[lane]; if (!sp || step < 0 || step >= totalSteps()) return;
+  S.cells[sp.i][step] = erase ? null : cellFor(sp, S.brush);
+}
+// dégradé : couleur 1 au point de départ du coup de pinceau, couleur 2 au point d'arrivée,
+// sur toutes les pistes entre la piste de départ et la piste courante
+// nombre de cases de la grille par palier de dégradé
+function gradCells(){
+  const k = S.gradSub, q = k === "grid" ? stepQ() : k === "bar" ? barQ() : k === "2" ? 2 : (SUBDIVS[k] || SUBDIVS["8"]).q;
+  return Math.max(1, Math.round(q / stepQ()));
+}
+function paintGrad(step, lane){
+  const d = drag, L = visSpots(); d.e = step; d.le = lane;
+  S.cells = d.base.map(r => r.slice());
+  const s0 = Math.min(d.s, step), s1 = Math.max(d.s, step), l0 = Math.min(d.l, lane), l1 = Math.max(d.l, lane);
+  const g = gradCells(), N = s1 - s0 + 1, M = Math.ceil(N / g), dir = step >= d.s ? 1 : -1;
+  // paliers comptés depuis le point de départ du geste : 1er palier = couleur 1, dernier = couleur 2
+  const vals = Array.from({length: M}, (_, m) => lerpVal(S.grad[0], S.grad[1], M > 1 ? m / (M - 1) : 0));
+  for (let l = l0; l <= l1; l++) { const sp = L[l]; if (!sp) continue;
+    for (let s = s0; s <= s1; s++) { const m = Math.floor(((s - d.s) * dir) / g); S.cells[sp.i][s] = cellFor(sp, vals[Math.min(M - 1, m)]); } }
+}
+function local(e){ const r = cv.getBoundingClientRect(); return {x: e.clientX - r.left, y: e.clientY - r.top}; }
+const clampLane = l => Math.max(0, Math.min(visSpots().length - 1, l));
+
+cv.addEventListener("contextmenu", e => e.preventDefault());
+const inSel = (step, lane) => !!S.sel && step >= S.sel.s0 && step <= S.sel.s1 && lane >= S.sel.l0 && lane <= S.sel.l1;
+// bloc de cellules d'une sélection (null = case vide, transparente au collage)
+function grab(a){ const L = visSpots(), out = []; for (let l = a.l0; l <= a.l1; l++) out.push(S.cells[L[l].i].slice(a.s0, a.s1 + 1)); return out; }
+function stamp(block, step, lane){
+  const L = visSpots(), n = totalSteps();
+  block.forEach((row, j) => { const sp = L[lane + j]; if (!sp) return;
+    row.forEach((v, k) => { const s = step + k; if (v && s >= 0 && s < n) S.cells[sp.i][s] = cellFor(sp, v); }); });
+}
+function clearRect(a){ const L = visSpots(); for (let l = a.l0; l <= a.l1; l++) for (let s = a.s0; s <= a.s1; s++) S.cells[L[l].i][s] = null; }
+function runAt(step, lane){ // zone contiguë de même valeur sous le curseur
+  const a = S.cells[visSpots()[lane].i], v = a[step]; if (!v) return null;
+  let s0 = step, s1 = step; while (s0 > 0 && sameVal(a[s0 - 1], v)) s0--; while (s1 < a.length - 1 && sameVal(a[s1 + 1], v)) s1++;
+  return {s0, s1, l0: lane, l1: lane};
+}
+
+cv.addEventListener("pointerdown", e => {
+  const {x, y} = local(e);
+  if (y < RULER_H) { drag = {type:"pan", x0:e.clientX, sl0:sc.scrollLeft, moved:false, seekX:x}; }
+  else if (y < RULER_H + WAVE_H) {
+    if (S.wav && !S.audioLock) { drag = {type:"wave", x0:e.clientX, off0:S.offset}; cv.style.cursor = "grabbing"; }
+    else drag = {type:"pan", x0:e.clientX, sl0:sc.scrollLeft, moved:false, seekX:x};
+  }
+  else {
+    const lane = laneAt(y); if (lane < 0 || lane >= visSpots().length) return;
+    const step = xToStep(x); if (step >= totalSteps()) return;
+    if (S.tool === "info") {
+      const c = S.cells[visSpots()[lane].i][step];
+      if (c) { S.brush = {...c}; syncBrush(); toast(`Couleur reprise dans le pinceau : DIM ${c.d} R ${c.r} G ${c.g} B ${c.b}.`); }
+      return;
+    }
+    if (S.tool === "select" && e.button === 0 && !e.shiftKey && inSel(step, lane)) {
+      // déplacer (ou copier avec Ctrl/Alt) le bloc sélectionné
+      pushUndo();
+      drag = {type:"move", step, lane, base: S.cells.map(r => r.slice()), block: grab(S.sel), from: {...S.sel}, copy: e.ctrlKey || e.metaKey || e.altKey, ds: 0, dl: 0};
+      cv.style.cursor = drag.copy ? "copy" : "grabbing";
+    } else if (S.tool === "select" || e.shiftKey) {
+      drag = {type:"sel", s:step, l:lane, moved:false}; S.sel = {s0:step, s1:step, l0:lane, l1:lane}; S.anchor = {step, lane};
+    } else {
+      S.sel = null; pushUndo();
+      const erase = e.button === 2 || e.altKey || S.tool === "erase";
+      if (!erase && S.gradMode) { drag = {type:"grad", s:step, l:lane, base:S.cells.map(r => r.slice())}; paintGrad(step, lane); }
+      else { drag = {type:"paint", erase, last:step, lane}; paint(step, lane, erase); }
+    }
+  }
+  if (drag) cv.setPointerCapture(e.pointerId);
+  draw(); updateLamps();
+});
+cv.addEventListener("pointermove", e => {
+  const {x, y} = local(e);
+  if (!drag) {
+    hover = y >= RULER_H + WAVE_H ? {step: xToStep(x), lane: laneAt(y)} : null;
+    cv.style.cursor = y < RULER_H ? "pointer" : y < RULER_H + WAVE_H ? (S.wav && !S.audioLock ? "ew-resize" : "grab")
+      : S.tool === "info" ? "help" : S.tool === "select" ? (hover && inSel(hover.step, hover.lane) ? ((e.ctrlKey || e.metaKey || e.altKey) ? "copy" : "move") : "cell") : "crosshair";
+    if (S.tool === "info" && hover && hover.lane >= 0 && hover.lane < visSpots().length && hover.step < totalSteps()) showTip(hover.step, hover.lane, e.clientX, e.clientY); else hideTip();
+    draw(); return;
+  }
+  if (drag.type === "pan") {
+    const dx = e.clientX - drag.x0;
+    if (Math.abs(dx) > 3) { drag.moved = true; sc.classList.add("panning"); }
+    if (drag.moved) sc.scrollLeft = drag.sl0 - dx;
+  }
+  else if (drag.type === "wave") {
+    let off = drag.off0 + (e.clientX - drag.x0) / S.zoom * stepSec();
+    if (e.shiftKey) off = Math.round(off / stepSec()) * stepSec();
+    S.offset = off; $("iOff").value = Math.round(off * 1000); if (S.playing) restart();
+  } else if (drag.type === "paint") {
+    const step = Math.max(0, Math.min(totalSteps() - 1, xToStep(x))), lane = clampLane(laneAt(y));
+    const a = Math.min(drag.last, step), b = Math.max(drag.last, step);
+    for (let s = a; s <= b; s++) paint(s, lane, drag.erase);
+    drag.last = step; updateLamps();
+  } else if (drag.type === "grad") {
+    paintGrad(Math.max(0, Math.min(totalSteps() - 1, xToStep(x))), clampLane(laneAt(y))); updateLamps();
+  } else if (drag.type === "sel") {
+    const step = Math.max(0, Math.min(totalSteps() - 1, xToStep(x))), lane = clampLane(laneAt(y));
+    if (step !== drag.s || lane !== drag.l) drag.moved = true;
+    S.sel = {s0:Math.min(drag.s, step), s1:Math.max(drag.s, step), l0:Math.min(drag.l, lane), l1:Math.max(drag.l, lane)};
+  } else if (drag.type === "move") {
+    const f = drag.from, n = totalSteps(), nl = visSpots().length;
+    const ds = Math.max(-f.s0, Math.min(n - 1 - f.s1, xToStep(x) - drag.step));
+    const dl = Math.max(-f.l0, Math.min(nl - 1 - f.l1, laneAt(y) - drag.lane));
+    drag.copy = e.ctrlKey || e.metaKey || e.altKey; cv.style.cursor = drag.copy ? "copy" : "grabbing";
+    if (ds !== drag.ds || dl !== drag.dl || drag.copy !== drag.lastCopy) {
+      drag.ds = ds; drag.dl = dl; drag.lastCopy = drag.copy;
+      S.cells = drag.base.map(r => r.slice());
+      if (!drag.copy) clearRect(f);
+      stamp(drag.block, f.s0 + ds, f.l0 + dl);
+      S.sel = {s0: f.s0 + ds, s1: f.s1 + ds, l0: f.l0 + dl, l1: f.l1 + dl};
+      updateLamps();
+    }
+  }
+  draw();
+});
+function seekAtX(x){
+  const t = Math.max(0, Math.min(totalSec(), xToSec(x))); seek(t);
+  S.anchor = {step: Math.min(totalSteps() - 1, Math.floor(t / stepSec() + 1e-9)), lane: S.anchor ? S.anchor.lane : 0};
+}
+function endDrag(){
+  if (!drag) return; const d = drag; drag = null; cv.style.cursor = ""; sc.classList.remove("panning");
+  if (d.type === "pan" && !d.moved && d.seekX != null) seekAtX(d.seekX);
+  if (d.type === "sel" && !d.moved) { // simple clic : sélectionne la zone de couleur cliquée
+    S.sel = S.tool === "select" ? runAt(d.s, d.l) : null; draw();
+  }
+  if (d.type === "move" && !d.ds && !d.dl) { undo.pop(); S.cells = d.base; }
+  if (d.type === "paint" || d.type === "grad" || d.type === "wave" || d.type === "move") changed();
+}
+cv.addEventListener("pointerup", endDrag);
+cv.addEventListener("pointercancel", endDrag);
+cv.addEventListener("pointerleave", () => { hideTip(); if (!drag) { hover = null; draw(); } });
+
+/* ---------- Outil « ? » : lecture du code d'une case ---------- */
+function hideTip(){ $("tip").hidden = true; }
+function showTip(step, lane, mx, my){
+  const sp = visSpots()[lane], c = S.cells[sp.i][step], nn = spotNotes(sp), tip = $("tip");
+  const q = step * stepQ(), bar = Math.floor(q / barQ() + 1e-9), beatQ = 4 / S.den, beat = Math.floor((q - bar * barQ()) / beatQ + 1e-9);
+  const sub = Math.round((q - bar * barQ() - beat * beatQ) / stepQ()) + 1;
+  // longueur de la zone de même valeur
+  let run = "";
+  if (c) { const a = S.cells[sp.i]; let s0 = step, s1 = step; while (s0 > 0 && sameVal(a[s0 - 1], c)) s0--; while (s1 < a.length - 1 && sameVal(a[s1 + 1], c)) s1++;
+    run = `zone : pas ${s0 + 1} → ${s1 + 1} (${s1 - s0 + 1} pas, ${((s1 - s0 + 1) * stepSec()).toFixed(3)} s)`; }
+  const vals = c ? [c.d, c.r, c.g, c.b] : [0, 0, 0, 0];
+  const rows = ["DIM", "R", "G", "B"].map((k, j) => {
+    const dmx = sp.ch + (sp.offs[j] ?? j), note = nn[j];
+    if (note == null) return `<tr class="mut"><td class="k">${k}</td><td>—</td><td>DMX ${dmx}</td><td>non mappé</td></tr>`;
+    const v = vals[j], ve = vel(v);
+    return `<tr${v ? "" : ' class="mut"'}><td class="k">${k}</td><td>${String(v).padStart(3, "\u2007")}</td><td>DMX ${dmx}</td><td>${noteName(note)} (${note})</td><td>${ve ? "vél. " + ve : "pas de note"}</td></tr>`;
+  }).join("");
+  tip.textContent = "";
+  const h = document.createElement("div"); h.className = "h"; h.textContent = sp.name;
+  const t = document.createElement("div"); t.className = "t";
+  t.textContent = `mesure ${bar + 1} · temps ${beat + 1} · pas ${sub} — ${fmtTime(step * stepSec())}`;
+  const tb = document.createElement("table"); tb.innerHTML = rows;
+  tip.append(h, t, tb);
+  const r = document.createElement("div"); r.className = "t"; r.style.margin = "6px 0 0";
+  r.textContent = c ? run + " · clic = reprendre dans le pinceau" : "case vide : aucune note"; tip.append(r);
+  tip.hidden = false;
+  const w = tip.offsetWidth, hh = tip.offsetHeight;
+  tip.style.left = Math.min(window.innerWidth - w - 8, mx + 16) + "px";
+  tip.style.top = (my + 16 + hh > window.innerHeight ? my - hh - 12 : my + 16) + "px";
+}
+cv.addEventListener("wheel", e => {
+  if (!(e.ctrlKey || e.metaKey)) return;
+  e.preventDefault();
+  const {x} = local(e), anchor = (x + sc.scrollLeft) / S.zoom;
+  S.zoom = Math.max(4, Math.min(64, Math.round(S.zoom * (e.deltaY < 0 ? 1.15 : 1 / 1.15))));
+  $("iZoom").value = S.zoom; layout(); sc.scrollLeft = anchor * S.zoom - x; draw();
+}, {passive:false});
+sc.addEventListener("scroll", draw);
+// zone vide sous les pistes : glisser pour faire défiler
+sc.addEventListener("pointerdown", e => {
+  if (e.target === cv || e.button !== 0) return;
+  drag = {type:"pan", x0:e.clientX, sl0:sc.scrollLeft, moved:false, seekX:null};
+  sc.setPointerCapture(e.pointerId);
+});
+sc.addEventListener("pointermove", e => { if (!drag || drag.type !== "pan" || e.target === cv) return;
+  const dx = e.clientX - drag.x0; if (Math.abs(dx) > 3) { drag.moved = true; sc.classList.add("panning"); } if (drag.moved) sc.scrollLeft = drag.sl0 - dx; });
+sc.addEventListener("pointerup", e => { if (e.target !== cv) endDrag(); });
+window.addEventListener("resize", layout);
+
+function copySel(cut){
+  const a = S.sel; if (!a) return toast("Sélectionnez d'abord une zone (outil Sélection, ou Maj + glisser).");
+  S.clip = grab(a);
+  if (cut) { pushUndo(); clearRect(a); S.sel = null; changed(); }
+  toast(`${a.s1 - a.s0 + 1} pas × ${a.l1 - a.l0 + 1} piste(s) ${cut ? "coupés" : "copiés"}.`);
+}
+function pasteClip(at, lane){
+  if (!S.clip) return toast("Le presse-papiers est vide : copiez d'abord une sélection.");
+  const L = visSpots(), n = totalSteps(), w = S.clip[0].length, h = S.clip.length;
+  if (at == null) { at = S.anchor ? S.anchor.step : Math.floor(S.pos / stepSec() + 1e-9); lane = S.anchor ? S.anchor.lane : 0; }
+  lane = Math.max(0, Math.min(L.length - h, lane)); at = Math.max(0, Math.min(n - 1, at));
+  pushUndo(); stamp(S.clip, at, lane);
+  S.sel = {s0: at, s1: Math.min(n - 1, at + w - 1), l0: lane, l1: Math.min(L.length - 1, lane + h - 1)};
+  S.anchor = {step: Math.min(n - 1, at + w), lane};
+  changed();
+}
+function duplicateSel(){ const a = S.sel; if (!a) return toast("Sélectionnez d'abord une zone.");
+  S.clip = grab(a); pasteClip(a.s1 + 1, a.l0); }
+function deleteSel(){ const a = S.sel; if (!a) return; pushUndo(); clearRect(a); changed(); }
+function nudgeSel(ds, dl){
+  const f = S.sel; if (!f) return; const n = totalSteps(), nl = visSpots().length;
+  ds = Math.max(-f.s0, Math.min(n - 1 - f.s1, ds)); dl = Math.max(-f.l0, Math.min(nl - 1 - f.l1, dl)); if (!ds && !dl) return;
+  pushUndo(); const block = grab(f); clearRect(f); stamp(block, f.s0 + ds, f.l0 + dl);
+  S.sel = {s0: f.s0 + ds, s1: f.s1 + ds, l0: f.l0 + dl, l1: f.l1 + dl}; changed();
+}
+
+/* ---------- Transport audio ---------- */
+let actx = null, src = null, gain = null, startCtx = 0, startPos = 0, raf = 0, clickTimer = 0, nextBeat = 0;
+function ac(){ if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)(); if (actx.state === "suspended") actx.resume(); return actx; }
+function play(){
+  const c = ac(); if (S.pos >= totalSec() - 1e-3) S.pos = 0;
+  startCtx = c.currentTime + .06; startPos = S.pos; S.playing = true; $("bPlay").textContent = "❚❚";
+  gain = c.createGain(); gain.gain.value = S.vol; gain.connect(c.destination);
+  if (S.wav) {
+    src = c.createBufferSource(); src.buffer = S.wav; src.playbackRate.value = S.rate; src.connect(gain);
+    const aPos = (startPos - S.offset) * S.rate;
+    if (aPos < S.wav.duration) { if (aPos >= 0) src.start(startCtx, aPos); else src.start(startCtx - aPos / S.rate, 0); }
+  }
+  const beatSec = 4 / S.den * secPerQ(); nextBeat = Math.ceil(startPos / beatSec - 1e-9);
+  nextMidiStep = Math.floor(startPos / stepSec() + 1e-9);
+  clickTimer = setInterval(() => { schedClicks(); schedMidi(); }, 25); schedClicks(); schedMidi();
+  cancelAnimationFrame(raf); raf = requestAnimationFrame(tick);
+}
+function stop(keepMidi){
+  if (S.playing && !keepMidi) midiStopped();
+  S.playing = false; $("bPlay").textContent = "▶";
+  try { src && src.stop(); } catch (_) {} src = null;
+  if (gain) { gain.disconnect(); gain = null; }
+  clearInterval(clickTimer); cancelAnimationFrame(raf); draw(); updateLamps();
+}
+function restart(){ if (S.playing) { stop(true); play(); } }
+function schedClicks(){
+  if (!S.playing || !S.click || !actx) return;
+  const beatSec = 4 / S.den * secPerQ(), horizon = actx.currentTime + .12;
+  for (;;) {
+    const when = startCtx + (nextBeat * beatSec - startPos);
+    if (when > horizon) break;
+    if (when >= actx.currentTime - .01 && nextBeat * beatSec < totalSec()) {
+      const o = actx.createOscillator(), g = actx.createGain(), acc = nextBeat % S.num === 0;
+      o.frequency.value = acc ? 1760 : 1100; g.gain.setValueAtTime(.0001, when); g.gain.exponentialRampToValueAtTime(acc ? .5 : .3, when + .002);
+      g.gain.exponentialRampToValueAtTime(.0001, when + .05); o.connect(g); g.connect(actx.destination); o.start(when); o.stop(when + .06);
+    }
+    nextBeat++;
+  }
+}
+function tick(){
+  if (!S.playing) return;
+  S.pos = Math.max(startPos, startPos + (actx.currentTime - startCtx));
+  if (S.pos >= totalSec()) { S.pos = totalSec(); stop(); return; }
+  const W = cv.clientWidth, px = secToX(S.pos);
+  if (px > W * .85 || px < 0) sc.scrollLeft = S.pos / stepSec() * S.zoom - W * .15;
+  draw(); updateLamps(); raf = requestAnimationFrame(tick);
+}
+function seek(t){ S.pos = t; if (S.playing) restart(); else { draw(); updateLamps(); } }
+function fmtTime(t){ const m = Math.floor(t / 60), s = t - m * 60; return String(m).padStart(2, "0") + ":" + s.toFixed(3).padStart(6, "0"); }
+function updateLamps(){
+  if (typeof pvSchedule === "function") pvSchedule();
+  const step = Math.min(totalSteps() - 1, Math.floor(S.pos / stepSec() + 1e-9));
+  for (const sp of visSpots()) { const el = $("lamp" + sp.i); if (!el) continue; const c = S.cells[sp.i][step];
+    el.style.background = lampCss(sp, c); el.style.boxShadow = c ? `0 0 10px ${lampCss(sp, c)}` : "none"; }
+  const q = S.pos / secPerQ(), bar = Math.floor(q / barQ() + 1e-9), beat = Math.floor((q - bar * barQ()) / (4 / S.den) + 1e-9);
+  $("pos").textContent = `${bar + 1}.${beat + 1} · ${fmtTime(S.pos)}`;
+  if (!S.playing && $("iMidiFollow").checked && performance.now() > midiHoldUntil) sendStepState(step, performance.now());
+}
+
+/* ---------- Sortie MIDI en direct (Web MIDI) ---------- */
+// Même codage que l'export : chaque sous-canal est suivi seul et n'est renvoyé que s'il change.
+const liveCh = () => { const v = $("iLiveCh").value; return ((v === "piste" || !v ? S.midiCh : +v) - 1) & 15; };
+function fillLiveCh(){ const sel = $("iLiveCh"), cur = sel.value || (() => { try { return localStorage.getItem(STORE + ".liveCh") || "piste"; } catch (_) { return "piste"; } })();
+  sel.textContent = ""; const o = document.createElement("option"); o.value = "piste"; o.textContent = `Piste (${S.midiCh})`; sel.append(o);
+  for (let c = 1; c <= 16; c++) { const op = document.createElement("option"); op.value = c; op.textContent = String(c); sel.append(op); }
+  sel.value = cur; }
+const NOTE_LBL = n => `${noteName(n)} (${n})`;
+let midiAccess = null, midiOut = null, nextMidiStep = 0, midiHoldUntil = 0, ledT = 0, midiCount = 0;
+const midiLive = {cells: new Map(), on: new Map(), ch: -1};
+function midiSend(data, ts){
+  if (!midiOut) return;
+  try { midiOut.send(data, ts); midiCount++; } catch (e) { $("midiMon").textContent = "erreur d'envoi : " + (e.message || e.name); return; }
+  const st = data[0] & 0xF0, c = (data[0] & 15) + 1;
+  $("midiMon").textContent = st === 0x90 ? `dernier : note on · canal ${c} · ${NOTE_LBL(data[1])} · vél. ${data[2]}`
+    : st === 0x80 ? `dernier : note off · canal ${c} · ${NOTE_LBL(data[1])}` : `dernier : CC${data[1]} · canal ${c}`;
+  const led = $("midiLed"); led.classList.add("on"); clearTimeout(ledT); ledT = setTimeout(() => led.classList.remove("on"), 80);
+}
+function midiLatency(){ const a = actx ? (actx.outputLatency || actx.baseLatency || 0) * 1000 : 0; return a + (parseFloat($("iMidiLat").value) || 0); }
+function spotOff(spi, ts){
+  for (let k = 0; k < 4; k++) { const key = spi + ":" + k, o = midiLive.on.get(key); if (o) { midiSend([0x80 | o[0], o[1], 64], ts); midiLive.on.delete(key); } }
+}
+function sendStepState(step, ts){
+  if (!midiOut) return;
+  const ch = liveCh();
+  for (const sp of S.spots) {
+    const c = sp.enabled && step >= 0 && step < totalSteps() ? (S.cells[sp.i][step] || null) : null, nn = spotNotes(sp);
+    for (let k = 0; k < 4; k++) {
+      const key = sp.i + ":" + k, o = midiLive.on.get(key);
+      const n = nn[k], v = c && n != null ? vel([c.d, c.r, c.g, c.b][k]) : 0;
+      if (o && o[0] === ch && o[1] === n && o[2] === v) continue;   // rien ne change sur ce sous-canal
+      if (o && v > 0 && S.legato && o[0] === ch && o[1] === n) { midiSend([0x90 | ch, n, v], ts); midiLive.on.set(key, [ch, n, v]); continue; }
+      if (o) { midiSend([0x80 | o[0], o[1], 64], ts); midiLive.on.delete(key); }
+      if (v > 0) { midiSend([0x90 | ch, n, v], ts); midiLive.on.set(key, [ch, n, v]); }
+    }
+  }
+  midiLive.ch = ch;
+}
+function schedMidi(){
+  if (!S.playing || !midiOut || !actx) return;
+  const horizon = actx.currentTime + .1, n = totalSteps(), lat = midiLatency();
+  while (nextMidiStep < n) {
+    const when = startCtx + (nextMidiStep * stepSec() - startPos);
+    if (when > horizon) break;
+    sendStepState(nextMidiStep, performance.now() + Math.max(0, (when - actx.currentTime) * 1000 + lat));
+    nextMidiStep++;
+  }
+}
+function midiAllOff(ts, allChannels){
+  for (const o of midiLive.on.values()) midiSend([0x80 | o[0], o[1], 64], ts);
+  const chans = allChannels ? [...Array(16).keys()] : [...new Set([liveCh(), ...[...midiLive.on.values()].map(o => o[0])])];
+  for (const c of chans) midiSend([0xB0 | c, 123, 0], ts);
+}
+function midiStopped(){
+  if (!midiOut) return;
+  const keys = [...midiLive.on.values()], now = performance.now(), later = now + 180 + Math.max(0, midiLatency());
+  // coupe tout maintenant, puis encore après les messages déjà programmés
+  midiAllOff(now); for (const o of keys) midiSend([0x80 | o[0], o[1], 64], later); midiSend([0xB0 | liveCh(), 123, 0], later);
+  midiLive.on.clear(); midiLive.cells.clear(); midiLive.ch = -1;
+  midiHoldUntil = later + 5;
+  if ($("iMidiFollow").checked) setTimeout(updateLamps, Math.ceil(later - now) + 10);
+}
+async function midiInit(){
+  if (midiAccess) return true;
+  if (!navigator.requestMIDIAccess) { toast("Ce navigateur ne gère pas le MIDI : utilisez Chrome ou Edge.", true, 7000); return false; }
+  try { midiAccess = await navigator.requestMIDIAccess(); midiAccess.onstatechange = fillMidiOuts; fillMidiOuts(); return true; }
+  catch (e) { toast("Accès MIDI refusé par le navigateur : " + (e.message || e.name), true, 7000); return false; }
+}
+function fillMidiOuts(){
+  const sel = $("iMidiOut"), cur = midiOut ? midiOut.id : sel.value;
+  let pref = ""; try { pref = localStorage.getItem(STORE + ".midiOut") || ""; } catch (_) {}
+  sel.textContent = ""; const o0 = document.createElement("option"); o0.value = ""; o0.textContent = "— aucune —"; sel.append(o0);
+  const outs = midiAccess ? [...midiAccess.outputs.values()] : [];
+  for (const o of outs) { const op = document.createElement("option"); op.value = o.id; op.textContent = o.name; sel.append(op); }
+  const keep = outs.find(o => o.id === cur) || (!midiOut && pref && outs.find(o => o.name === pref));
+  sel.value = keep ? keep.id : "";
+  setMidiOut(keep || null, true);
+  $("midiInfo").textContent = outs.length ? `${outs.length} port(s) détecté(s)` : "aucun port MIDI détecté";
+}
+function setMidiOut(o, silent){
+  if (midiOut && midiOut !== o) { midiAllOff(performance.now()); midiLive.on.clear(); midiLive.cells.clear(); midiLive.ch = -1; }
+  midiOut = o || null;
+  if (!silent) { try { localStorage.setItem(STORE + ".midiOut", o ? o.name : ""); } catch (_) {} }
+  updSummary();
+  if (midiOut) { $("midiInfo").textContent = `→ ${midiOut.name}, canal ${liveCh() + 1}`; if (S.playing) nextMidiStep = Math.floor(S.pos / stepSec() + 1e-9); updateLamps(); }
+}
+$("iMidiOut").addEventListener("pointerdown", () => { if (!midiAccess) midiInit(); });
+$("iMidiOut").addEventListener("focus", () => { if (!midiAccess) midiInit(); });
+$("iMidiOut").onchange = () => setMidiOut(midiAccess && $("iMidiOut").value ? midiAccess.outputs.get($("iMidiOut").value) : null);
+$("bMidiScan").onclick = async () => { if (await midiInit()) { fillMidiOuts(); toast($("midiInfo").textContent + "."); } };
+$("iLiveCh").onchange = () => { try { localStorage.setItem(STORE + ".liveCh", $("iLiveCh").value); } catch (_) {}
+  if (midiOut) { $("midiInfo").textContent = `→ ${midiOut.name}, canal ${liveCh() + 1}`; updateLamps(); } };
+$("bMidiTest").onclick = async () => {
+  if (!midiOut && !(await midiInit() && midiOut)) return toast("Choisissez d'abord une sortie MIDI dans la liste.", true);
+  const sp = S.spots.find(x => x.enabled && spotNotes(x).some(n => n != null)); if (!sp) return toast("Aucun spot actif avec des notes dans la config.", true);
+  const ch = liveCh(), nn = spotNotes(sp).filter(n => n != null), now = performance.now();
+  nn.forEach(n => midiSend([0x90 | ch, n, 127], now)); nn.forEach(n => midiSend([0x80 | ch, n, 64], now + 1000));
+  toast(`Test envoyé à « ${midiOut.name} » : ${sp.name}, canal ${ch + 1}, notes ${nn.map(NOTE_LBL).join(" ")}, vél. 127 pendant 1 s.`, false, 8000);
+};
+$("bBlackout").onclick = () => { if (!midiOut) return toast("Choisissez d'abord une sortie MIDI."); midiAllOff(performance.now(), true);
+  midiLive.on.clear(); midiLive.cells.clear(); midiLive.ch = -1; midiHoldUntil = performance.now() + 400; toast("Noir envoyé : toutes les notes coupées."); };
+$("iMidiFollow").onchange = () => { if ($("iMidiFollow").checked) updateLamps(); else if (!S.playing && midiOut) { midiAllOff(performance.now()); midiLive.on.clear(); midiLive.cells.clear(); midiLive.ch = -1; } };
+// si un port a déjà été autorisé, on se reconnecte sans demander
+try { if (navigator.permissions && localStorage.getItem(STORE + ".midiOut"))
+  navigator.permissions.query({name: "midi"}).then(r => { if (r.state === "granted") midiInit(); }).catch(() => {}); } catch (_) {}
+
+/* ---------- Export MIDI ---------- */
+function buildMidi(){
+  const stepTicks = Math.round(PPQ * stepQ()), ch = (S.midiCh - 1) & 15, ev = [];
+  let notes = 0;
+  for (const sp of S.spots) {
+    if (!sp.enabled) continue;
+    // flux minimal : chaque sous-canal (DIM, R, G, B) est codé seul ; une note n'est relancée
+    // que quand la vélocité de CE sous-canal change (passer du rouge au bleu ne touche ni DIM ni G)
+    const a = S.cells[sp.i], nn = spotNotes(sp);
+    for (let k = 0; k < 4; k++) {
+      if (nn[k] == null) continue;
+      const vk = s => { const c = a[s]; return c ? vel([c.d, c.r, c.g, c.b][k]) : 0; };
+      let s = 0;
+      while (s < a.length) {
+        const v = vk(s); let e = s + 1;
+        while (e < a.length && vk(e) === v) e++;
+        if (v > 0) {
+          ev.push({t:s * stepTicks, on:1, n:nn[k], v}); notes++;
+          // enchaîné : si la valeur suivante est aussi allumée, pas de note-off (sa note-on prend le relais)
+          const next = e < a.length ? vk(e) : 0;
+          if (!(S.legato && next > 0)) ev.push({t:e * stepTicks, on:0, n:nn[k], v:64});
+        }
+        s = e;
+      }
+    }
+  }
+  ev.sort((a, b) => a.t - b.t || a.on - b.on);
+  const vlq = n => { const b = [n & 127]; n = Math.floor(n / 128); while (n > 0) { b.unshift((n & 127) | 128); n = Math.floor(n / 128); } return b; };
+  const txt = s => Array.from(new TextEncoder().encode(s));
+  const meta = (type, data) => [0, 0xFF, type, ...vlq(data.length), ...data];
+  const usq = Math.round(60e6 / S.bpm);
+  const t0 = [
+    ...meta(0x03, txt("Tempo")),
+    ...meta(0x51, [usq >> 16 & 255, usq >> 8 & 255, usq & 255]),
+    ...meta(0x58, [S.num, Math.log2(S.den), 24, 8]),
+    0, 0xFF, 0x2F, 0
+  ];
+  const t1 = [...meta(0x03, txt("DMX lumieres"))];
+  let last = 0;
+  for (const x of ev) { t1.push(...vlq(x.t - last), (x.on ? 0x90 : 0x80) | ch, x.n, x.v); last = x.t; }
+  const endT = totalSteps() * stepTicks;
+  t1.push(...vlq(Math.max(0, endT - last)), 0xFF, 0x2F, 0);
+  const u32 = n => [n >>> 24 & 255, n >>> 16 & 255, n >>> 8 & 255, n & 255];
+  const chunk = (id, d) => [...txt(id), ...u32(d.length), ...d];
+  const bytes = [...chunk("MThd", [0, 1, 0, 2, PPQ >> 8, PPQ & 255]), ...chunk("MTrk", t0), ...chunk("MTrk", t1)];
+  return {data: new Uint8Array(bytes), notes};
+}
+function saveFile(name, data, mime){
+  const url = URL.createObjectURL(new Blob([data], {type: mime}));
+  const a = document.createElement("a"); a.href = url; a.download = name; document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+const baseName = () => (S.wavName ? S.wavName.replace(/\.[^.]+$/, "") : "lumieres").replace(/[^\w\-]+/g, "_");
+
+/* ---------- Import MIDI ---------- */
+function parseMidi(buf){
+  const d = new Uint8Array(buf); let p = 0;
+  const u32 = () => (d[p++] << 24 | d[p++] << 16 | d[p++] << 8 | d[p++]) >>> 0;
+  const u16 = () => d[p++] << 8 | d[p++];
+  const str = n => { const s = String.fromCharCode(...d.subarray(p, p + n)); p += n; return s; };
+  if (d.length < 14 || str(4) !== "MThd") throw new Error("en-tête MThd absent, ce n'est pas un fichier MIDI standard");
+  const hl = u32(); u16(); const ntr = u16(), div = u16(); p = 8 + hl;
+  if (div & 0x8000) throw new Error("division temporelle SMPTE non prise en charge");
+  const out = {ppq: div, tempos: [], sigs: [], notes: []};
+  for (let t = 0; t < ntr && p + 8 <= d.length; t++) {
+    const id = str(4), len = u32(), end = Math.min(d.length, p + len);
+    if (id !== "MTrk") { p = end; continue; }
+    let tick = 0, rs = 0; const open = new Map();
+    const vlq = () => { let v = 0, b; do { b = d[p++]; v = v * 128 + (b & 127); } while ((b & 128) && p < end); return v; };
+    const close = (k, tk) => { const o = open.get(k); if (!o) return; open.delete(k); if (tk > o.t0) out.notes.push({...o, t1: tk}); };
+    while (p < end) {
+      tick += vlq();
+      let st = d[p];
+      if (st & 0x80) { p++; if (st < 0xF0) rs = st; }
+      else if (rs) st = rs;
+      else throw new Error("données MIDI corrompues (piste " + (t + 1) + ")");
+      if (st === 0xFF) {
+        const type = d[p++], l = vlq(), s = p; p += l;
+        if (type === 0x51 && l >= 3) out.tempos.push({tick, us: d[s] << 16 | d[s + 1] << 8 | d[s + 2]});
+        else if (type === 0x58 && l >= 2) out.sigs.push({tick, num: d[s], den: 2 ** d[s + 1]});
+        else if (type === 0x2F) break;
+      } else if (st === 0xF0 || st === 0xF7) p += vlq();
+      else {
+        const hi = st & 0xF0, ch = st & 15;
+        if (hi === 0xC0 || hi === 0xD0) { p += 1; continue; }
+        const a = d[p++], b = d[p++], k = ch * 128 + a;
+        if (hi === 0x90 && b > 0) { close(k, tick); open.set(k, {n: a, ch, v: b, t0: tick}); }
+        else if (hi === 0x80 || hi === 0x90) close(k, tick);
+      }
+    }
+    for (const k of [...open.keys()]) close(k, tick);
+    out.end = Math.max(out.end || 0, tick);
+    p = end;
+  }
+  return out;
+}
+
+function importMidi(m, fileName){
+  // notes MIDI → (spot actif, sous-canal) d'après la config chargée
+  const slot = new Map();
+  for (const sp of S.spots) if (sp.enabled) spotNotes(sp).forEach((n, k) => { if (n != null && !slot.has(n)) slot.set(n, {i: sp.i, k}); });
+  const used = m.notes.filter(x => slot.has(x.n));
+  const ignored = [...new Set(m.notes.filter(x => !slot.has(x.n)).map(x => x.n))].sort((a, b) => a - b);
+  if (!used.length) throw new Error("aucune note du fichier ne correspond aux spots actifs de la config" +
+    (ignored.length ? ` (notes trouvées : ${ignored.slice(0, 8).map(noteName).join(" ")}${ignored.length > 8 ? "…" : ""})` : ""));
+  const info = [];
+
+  // tempo et signature du fichier
+  if (m.tempos.length) S.bpm = Math.round(60e6 / m.tempos[0].us * 100) / 100;
+  if (new Set(m.tempos.map(t => t.us)).size > 1) info.push("plusieurs tempos dans le fichier, seul le premier est utilisé");
+  if (m.sigs.length && [2, 4, 8, 16].includes(m.sigs[0].den)) { S.num = m.sigs[0].num; S.den = m.sigs[0].den; }
+
+  // subdivision : on garde l'actuelle si toutes les notes tombent dessus, sinon la plus grossière qui convient
+  const bounds = []; for (const x of used) bounds.push(x.t0 / m.ppq, x.t1 / m.ppq);
+  const err = k => Math.max(...bounds.map(q => { const r = q / SUBDIVS[k].q; return Math.abs(r - Math.round(r)) * SUBDIVS[k].q; }));
+  const fits = k => bounds.every(q => { const r = q / SUBDIVS[k].q; return Math.abs(r - Math.round(r)) < 0.02; });
+  if (!fits(S.sub)) {
+    const order = ["4", "8", "8T", "16", "16T", "32"], k = order.find(fits);
+    if (k) S.sub = k;
+    else { S.sub = order.reduce((best, x) => err(x) < err(best) - 1e-9 ? x : best, "32");
+      info.push(`certaines notes ne tombent sur aucune grille, arrondies au ${SUBDIVS[S.sub].l}`); }
+  }
+
+  // longueur
+  const lastQ = Math.max(m.end || 0, ...used.map(x => x.t1)) / m.ppq;
+  S.bars = Math.max(1, Math.ceil(lastQ / barQ() - 1e-6));
+  if (S.wav) S.bars = Math.max(S.bars, Math.ceil((S.offset + S.wav.duration / S.rate) / (barQ() * secPerQ()) - 1e-6));
+
+  // remplissage des cases : valeur DMX = vélocité × 255/127
+  const n = totalSteps(), stepT = stepQ() * m.ppq;
+  const vals = S.spots.map(() => Array.from({length: n}, () => null));
+  for (const x of used) {
+    const {i, k} = slot.get(x.n), a = Math.max(0, Math.round(x.t0 / stepT)), b = Math.min(n, Math.round(x.t1 / stepT));
+    const v = Math.min(255, Math.round(x.v * 255 / 127));
+    for (let s = a; s < Math.max(b, a + 1) && s < n; s++) { const c = vals[i][s] || (vals[i][s] = [0, 0, 0, 0]); c[k] = Math.max(c[k], v); }
+  }
+  S.cells = vals.map(a => a.map(c => c ? {d: c[0], r: c[1], g: c[2], b: c[3]} : null));
+  ensureCells();
+
+  // canal MIDI le plus utilisé
+  const cnt = new Array(16).fill(0); used.forEach(x => cnt[x.ch]++); S.midiCh = cnt.indexOf(Math.max(...cnt)) + 1;
+
+  undo = []; S.sel = null; S.pos = 0;
+  S._pendingPreview = p.preview || {};
+  const spotsHit = new Set(used.map(x => slot.get(x.n).i)).size;
+  if (ignored.length) info.push(`${ignored.length} note(s) hors config ignorée(s) : ${ignored.slice(0, 8).map(noteName).join(" ")}${ignored.length > 8 ? "…" : ""}`);
+  return `${fileName} : ${used.length} notes sur ${spotsHit} spot(s), ${S.bpm} BPM, ${S.num}/${S.den}, grille ${SUBDIVS[S.sub].l}, ${S.bars} mesures.` +
+    (info.length ? " " + info.join(" ; ") + "." : "");
+}
+
+/* ---------- Projet ---------- */
+function projectJSON(withImg){
+  const runs = S.cells.map(a => { const r = []; let s = 0; while (s < a.length) { const c = a[s]; let e = s + 1; while (e < a.length && sameVal(a[e], c)) e++; if (c) r.push([s, e - s, c.d, c.r, c.g, c.b]); s = e; } return r; });
+  return {app:"midi-dmx-timeline", version:1, config:S.cfg, configName:S.cfgName,
+    settings:{bpm:S.bpm, num:S.num, den:S.den, sub:S.sub, bars:S.bars, midiCh:S.midiCh, octBase:S.octBase, showDisabled:S.showDisabled, zoom:S.zoom, brush:S.brush, gradMode:S.gradMode, grad:S.grad, gradSub:S.gradSub, legato:S.legato, audioLock:S.audioLock},
+    audio:{name:S.wavName, offset:S.offset, rate:S.rate, vol:S.vol}, cells:runs, preview:pvToJSON(withImg)};
+}
+function loadProject(p){
+  if (!p || p.app !== "midi-dmx-timeline") throw new Error("ce n'est pas un projet de cette application");
+  const st = p.settings || {};
+  Object.assign(S, {bpm:st.bpm ?? 120, num:st.num ?? 4, den:st.den ?? 4, sub:SUBDIVS[st.sub] ? st.sub : "16", bars:st.bars ?? 16,
+    midiCh:st.midiCh ?? 1, octBase:st.octBase ?? -1, showDisabled:!!st.showDisabled, zoom:st.zoom ?? 18, brush:st.brush || S.brush, gradMode:!!st.gradMode, gradSub:st.gradSub || "8", legato:st.legato !== false, audioLock:!!st.audioLock, grad:Array.isArray(st.grad) && st.grad.length === 2 ? st.grad : S.grad, gradSlot:0});
+  if (S.gradMode) S.brush = {...S.grad[0]};
+  const au = p.audio || {};
+  if (au.name !== S.wavName) { S.wav = null; S.peaks = null; S.wavBytes = null; }
+  S.wavName = au.name || ""; S.offset = au.offset || 0; S.rate = au.rate || 1; S.vol = au.vol ?? .8;
+  S.cells = [];
+  applyConfig(p.config || DEFAULT_CONFIG, p.configName || "");
+  (p.cells || []).forEach((runs, i) => { if (!S.cells[i]) return; for (const [s, n, d, r, g, b] of runs) for (let k = s; k < s + n && k < S.cells[i].length; k++) S.cells[i][k] = {d, r, g, b}; });
+  undo = []; S.sel = null; S.pos = 0;
+}
+let saveT = 0;
+function autosave(){ clearTimeout(saveT); saveT = setTimeout(() => { try { localStorage.setItem(STORE, JSON.stringify(projectJSON())); } catch (_) {} }, 400); }
+
+/* ---------- Changements globaux ---------- */
+function changed(){ draw(); updateLamps(); autosave(); }
+function rebuild(){ ensureCells(); if (typeof pvFillSpots === "function" && $("iPrevSpot")) { pvFillSpots(); pvSyncTools(); } buildPresets(); buildLabels(); syncInputs(); layout(); updateLamps(); autosave(); }
+
+function resample(newSub){
+  const oldQ = stepQ(); S.sub = newSub; const newQ = stepQ(), n = totalSteps();
+  S.cells = S.cells.map(a => { const b = new Array(n).fill(null); for (let s = 0; s < n; s++) { const o = Math.floor(s * newQ / oldQ + 1e-9); if (o < a.length) b[s] = a[o]; } return b; });
+}
+function setTool(t){ S.tool = t; $("tPaint").classList.toggle("on", t === "paint"); $("tErase").classList.toggle("on", t === "erase"); $("tSel").classList.toggle("on", t === "select"); $("tInfo").classList.toggle("on", t === "info"); if (t !== "info") hideTip(); draw(); }
+let toastT = 0;
+function toast(msg, bad, ms){ const el = $("toast"); el.textContent = msg; el.className = bad ? "warn" : ""; el.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => el.hidden = true, ms || 3500); }
+
+const num = (id, lo, hi, def) => { const v = parseFloat($(id).value); return isFinite(v) ? Math.max(lo, Math.min(hi, v)) : def; };
+$("iBpm").onchange = () => { S.bpm = num("iBpm", 20, 400, 120); seek(Math.min(S.pos, totalSec())); rebuild(); };
+$("iNum").onchange = () => { S.num = Math.round(num("iNum", 1, 32, 4)); rebuild(); };
+$("iDen").onchange = () => { S.den = +$("iDen").value; rebuild(); };
+$("iSub").onchange = () => { pushUndo(); resample($("iSub").value); rebuild(); };
+$("iBars").onchange = () => { S.bars = Math.round(num("iBars", 1, 2000, 16)); rebuild(); };
+$("iCh").onchange = () => { S.midiCh = Math.round(num("iCh", 1, 16, 1)); fillLiveCh(); if (midiOut) $("midiInfo").textContent = `→ ${midiOut.name}, canal ${liveCh() + 1}`; autosave(); updateLamps(); };
+$("iOct").onchange = () => { S.octBase = +$("iOct").value; rebuild(); };
+$("iOff").onchange = () => { S.offset = num("iOff", -36e5, 36e5, 0) / 1000; restart(); changed(); };
+document.querySelectorAll("[data-nudge]").forEach(b => b.onclick = () => { S.offset += +b.dataset.nudge / 1000; $("iOff").value = Math.round(S.offset * 1000); restart(); changed(); });
+$("iRate").onchange = () => { S.rate = num("iRate", 50, 200, 100) / 100; restart(); changed(); };
+$("iVol").oninput = () => { S.vol = $("iVol").value / 100; if (gain) gain.gain.value = S.vol; autosave(); };
+$("iClick").onchange = () => { S.click = $("iClick").checked; };
+$("iShowOff").onchange = () => { S.showDisabled = $("iShowOff").checked; S.sel = null; rebuild(); };
+$("iZoom").oninput = () => { const W = cv.clientWidth, c = (sc.scrollLeft + W / 2) / S.zoom; S.zoom = +$("iZoom").value; layout(); sc.scrollLeft = c * S.zoom - W / 2; draw(); };
+$("iColor").oninput = () => { const h = $("iColor").value; S.brush = {...S.brush, r:parseInt(h.slice(1, 3), 16), g:parseInt(h.slice(3, 5), 16), b:parseInt(h.slice(5, 7), 16)}; setTool("paint"); syncBrush(); };
+$("iDim").oninput = () => { S.brush = {...S.brush, d:+$("iDim").value}; syncBrush(); };
+$("tPaint").onclick = () => setTool("paint");
+$("mSolid").onclick = () => { S.gradMode = false; syncBrush(); autosave(); };
+$("mGrad").onclick = () => { if (!S.gradMode) { S.gradMode = true; S.brush = {...S.grad[S.gradSlot]}; } setTool("paint"); syncBrush(); autosave(); };
+[0, 1].forEach(k => $("g" + (k + 1)).onclick = () => { S.gradSlot = k; S.brush = {...S.grad[k]}; syncBrush(); });
+$("iLegato").onchange = () => { S.legato = $("iLegato").value === "1"; autosave(); };
+$("iGradSub").onchange = () => { S.gradSub = $("iGradSub").value; autosave(); };
+$("gSwap").onclick = () => { S.grad = [S.grad[1], S.grad[0]]; S.brush = {...S.grad[S.gradSlot]}; syncBrush(); autosave(); };
+$("tErase").onclick = () => setTool("erase");
+$("tSel").onclick = () => setTool("select");
+$("tInfo").onclick = () => setTool("info");
+$("bCopy").onclick = () => copySel(false);
+$("bCut").onclick = () => copySel(true);
+$("bPaste").onclick = () => pasteClip();
+$("bDup").onclick = duplicateSel;
+$("bDel").onclick = deleteSel;
+$("bUndo").onclick = doUndo;
+$("bClearAll").onclick = () => { pushUndo(); S.cells = S.cells.map(a => a.map(() => null)); changed(); toast("Toutes les pistes ont été vidées (Ctrl+Z pour annuler)."); };
+$("bPlay").onclick = () => S.playing ? stop() : play();
+$("bHome").onclick = () => { seek(0); sc.scrollLeft = 0; };
+$("bFitBars").onclick = () => {
+  if (!S.wav) return toast("Chargez d'abord un WAV.");
+  const end = S.offset + S.wav.duration / S.rate; S.bars = Math.max(1, Math.ceil(end / (barQ() * secPerQ()) - 1e-6)); rebuild();
+  toast(`${S.bars} mesures couvrent le WAV (${fmtTime(end)}).`);
+};
+$("bNew").onclick = () => {
+  stop(); S.cells = []; S.wav = null; S.peaks = null; S.wavBytes = null; S.wavName = ""; S.offset = 0; S.rate = 1; S.pos = 0; S.sel = null; undo = [];
+  applyConfig(S.cfg || DEFAULT_CONFIG, S.cfgName); rebuild(); sc.scrollLeft = 0; toast("Nouveau projet (config conservée).");
+};
+$("bSaveCfg").onclick = () => saveFile((S.cfgName ? S.cfgName.replace(/\.[^.]+$/, "") : "config_spots") + ".json", JSON.stringify(S.cfg, null, 2), "application/json");
+$("bSave").onclick = async () => {
+  const p = projectJSON();
+  if ($("iEmbed").checked && S.wavBytes) {
+    toast("Intégration de l'audio…");
+    p.audio.type = S.wavType; p.audio.data = await toDataURL(S.wavBytes, S.wavType);
+  }
+  p.preview = pvToJSON(true);
+  saveFile(baseName() + "_lumieres.json", JSON.stringify(p), "application/json");
+  const mb = S.wavBytes ? S.wavBytes.byteLength / 1048576 : 0;
+  toast(p.audio.data ? `Projet enregistré avec l'audio (${mb.toFixed(1)} Mo).` : "Projet enregistré (sans l'audio).");
+};
+$("iEmbed").onchange = () => { try { localStorage.setItem(STORE + ".embed", $("iEmbed").checked ? "1" : "0"); } catch (_) {} };
+try { if (localStorage.getItem(STORE + ".embed") === "0") $("iEmbed").checked = false; } catch (_) {}
+$("bExport").onclick = () => {
+  const {data, notes} = buildMidi();
+  if (!notes) return toast("Aucune note à exporter : peignez au moins une zone sur un spot actif.", true);
+  const name = `${baseName()}_${String(S.bpm).replace(".", "_")}bpm.mid`;
+  saveFile(name, data, "audio/midi");
+  toast(`${name} : ${notes} notes, ${S.bars} mesures, canal ${S.midiCh}.`);
+};
+const readText = f => new Promise((ok, ko) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = () => ko(r.error); r.readAsText(f); });
+$("fCfg").onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+  try { pushUndo(); applyConfig(JSON.parse(await readText(f)), f.name); S.sel = null; rebuild(); toast(`Config chargée : ${S.spots.length} spots.`); }
+  catch (err) { toast("Config illisible : " + err.message, true); }
+};
+$("fProj").onchange = async e => {
+  const files = [...e.target.files]; e.target.value = "";
+  const f = files.find(x => /\.json$/i.test(x.name)) || files.find(x => !/^audio\//.test(x.type) && !/\.(wav|mp3|ogg|flac|aif+|m4a)$/i.test(x.name));
+  const audio = files.find(x => x !== f && (/^audio\//.test(x.type) || /\.(wav|mp3|ogg|flac|aif+|m4a)$/i.test(x.name)));
+  if (!f) return toast("Sélectionnez le fichier .json du projet.", true);
+  let p;
+  try { p = JSON.parse(await readText(f)); stop(); loadProject(p); rebuild(); await pvFromJSON(p.preview ? {...p.preview, image: p.preview.image ?? null} : {image: null}); }
+  catch (err) { return toast("Projet illisible : " + err.message, true); }
+  const au = p.audio || {};
+  try {
+    if (audio) { toast("Chargement de l'audio…"); await loadWavBytes(await audio.arrayBuffer(), audio.name, audio.type, audio.name === au.name); }
+    else if (au.data) { toast("Chargement de l'audio intégré…"); await loadWavBytes(await (await fetch(au.data)).arrayBuffer(), au.name, au.type, true); }
+    else await restoreCachedWav();
+  } catch (err) { return toast("Projet ouvert, mais l'audio n'a pas pu être lu : " + (err && err.message || "format non pris en charge"), true, 9000); }
+  toast(S.wavName && !S.wav ? `Projet ouvert. Le WAV « ${S.wavName} » n'est pas dans le projet : importez-le (décalage et étirement seront conservés).` : `Projet ouvert${S.wav ? " avec « " + S.wavName + " »" : ""}.`, !S.wav && !!S.wavName, 9000);
+};
+$("fMidi").onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+  try {
+    const m = parseMidi(await f.arrayBuffer());
+    if (S.cells.some(a => a.some(Boolean)) && !confirm("Remplacer le contenu actuel des pistes par celui de « " + f.name + " » ?")) return;
+    stop(); const msg = importMidi(m, f.name); rebuild(); sc.scrollLeft = 0; toast(msg, false, 9000);
+  } catch (err) { toast("Import MIDI impossible : " + err.message, true, 9000); }
+};
+/* ---------- Audio : chargement, mémorisation locale (IndexedDB), intégration au projet ---------- */
+// keep = true : garde décalage/étirement du projet (rechargement du même fichier)
+async function loadWavBytes(bytes, name, type, keep){
+  stop(); const c = ac();
+  const buf = await c.decodeAudioData(bytes.slice(0));
+  if (!keep && name !== S.wavName) { S.offset = 0; S.rate = 1; }
+  S.wav = buf; S.wavName = name; S.wavBytes = bytes; S.wavType = type || "audio/wav"; S.peaks = computePeaks(buf);
+  const need = Math.ceil((S.offset + buf.duration / S.rate) / (barQ() * secPerQ()) - 1e-6);
+  if (need > S.bars) S.bars = need;
+  idbPut("wav", {name, type: S.wavType, bytes});
+  rebuild();
+  return buf;
+}
+function idb(){ return new Promise((ok, ko) => { try { const r = indexedDB.open("midiDmxTimeline", 1);
+  r.onupgradeneeded = () => r.result.createObjectStore("kv"); r.onsuccess = () => ok(r.result); r.onerror = () => ko(r.error); } catch (e) { ko(e); } }); }
+async function idbPut(k, v){ try { const db = await idb(); db.transaction("kv", "readwrite").objectStore("kv").put(v, k); } catch (_) {} }
+async function idbGet(k){ try { const db = await idb(); return await new Promise(ok => { const r = db.transaction("kv").objectStore("kv").get(k); r.onsuccess = () => ok(r.result); r.onerror = () => ok(null); }); } catch (_) { return null; } }
+const toDataURL = (bytes, type) => new Promise((ok, ko) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = () => ko(r.error); r.readAsDataURL(new Blob([bytes], {type})); });
+async function restoreCachedWav(){ // même nom de fichier que le projet → rechargé depuis la mémoire du navigateur
+  if (!S.wavName || S.wav) return false;
+  const w = await idbGet("wav");
+  if (!w || w.name !== S.wavName || !w.bytes) return false;
+  try { await loadWavBytes(w.bytes, w.name, w.type, true); return true; } catch (_) { return false; }
+}
+
+$("fWav").onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+  try {
+    toast("Décodage de l'audio…");
+    const buf = await loadWavBytes(await f.arrayBuffer(), f.name, f.type, false);
+    toast(`${f.name} : ${fmtTime(buf.duration)}, ${buf.sampleRate} Hz.`);
+  } catch (err) { toast("Audio illisible : " + (err && err.message || "format non pris en charge"), true); }
+};
+
+
+/* ---------- Fenêtre d'aperçu : photo de scène + faisceaux colorés ---------- */
+// Coordonnées normalisées (0..1) par rapport à l'image, pour suivre le redimensionnement.
+const PV = {img: null, imgURL: null, ambient: .3, haze: .35, spots: {}, sel: null, edit: false, win: null};
+const pcv = $("pcv"), pcx = pcv.getContext("2d");
+const pvLight = document.createElement("canvas"), pvTmp = document.createElement("canvas"), pvBase = document.createElement("canvas");
+let pvW = 0, pvH = 0, pvRaf = 0, pvDrag = null;
+
+function pvOpen(){ $("prevWin").hidden = false; pvLayout(); try { localStorage.setItem(STORE + ".prevOpen", "1"); } catch (_) {} }
+function pvClose(){ $("prevWin").hidden = true; try { localStorage.setItem(STORE + ".prevOpen", "0"); } catch (_) {} }
+$("bPreview").onclick = () => $("prevWin").hidden ? pvOpen() : pvClose();
+$("bPrevClose").onclick = pvClose;
+$("bPrevEdit").onclick = () => { PV.edit = !PV.edit; $("bPrevEdit").classList.toggle("on", PV.edit); $("prevTools").hidden = !PV.edit; pvFillSpots(); pvSyncTools(); pvLayout(); };
+
+// déplacement de la fenêtre par son titre
+$("prevHead").addEventListener("pointerdown", e => {
+  if (e.target.closest("button")) return;
+  const w = $("prevWin"), r = w.getBoundingClientRect();
+  const d = {x: e.clientX - r.left, y: e.clientY - r.top};
+  const mv = ev => { w.style.left = Math.max(0, Math.min(innerWidth - 80, ev.clientX - d.x)) + "px"; w.style.top = Math.max(0, Math.min(innerHeight - 40, ev.clientY - d.y)) + "px"; w.style.right = "auto"; };
+  const up = () => { removeEventListener("pointermove", mv); removeEventListener("pointerup", up); pvSaveWin(); };
+  addEventListener("pointermove", mv); addEventListener("pointerup", up);
+});
+function pvSaveWin(){ const w = $("prevWin"), r = w.getBoundingClientRect(); try { localStorage.setItem(STORE + ".prevWin", JSON.stringify({x: r.left, y: r.top, w: r.width, h: r.height})); } catch (_) {} }
+try { const g = JSON.parse(localStorage.getItem(STORE + ".prevWin") || "null"); if (g) { const w = $("prevWin");
+  Object.assign(w.style, {left: Math.min(g.x, innerWidth - 120) + "px", top: Math.min(g.y, innerHeight - 80) + "px", right: "auto", width: g.w + "px", height: g.h + "px"}); } } catch (_) {}
+new ResizeObserver(() => { if (!$("prevWin").hidden) { pvLayout(); pvSaveWin(); } }).observe($("prevWin"));
+
+function pvAspect(){ return PV.img ? PV.img.width / PV.img.height : 16 / 9; }
+function pvLayout(){
+  const body = $("prevBody"), bw = body.clientWidth, bh = body.clientHeight; if (!bw || !bh) return;
+  const a = pvAspect(); let w = bw, h = bw / a; if (h > bh) { h = bh; w = bh * a; }
+  const dpr = window.devicePixelRatio || 1;
+  pvW = Math.max(1, Math.round(w * dpr)); pvH = Math.max(1, Math.round(h * dpr));
+  pcv.style.width = Math.round(w) + "px"; pcv.style.height = Math.round(h) + "px";
+  for (const c of [pcv, pvLight, pvTmp, pvBase]) { c.width = pvW; c.height = pvH; }
+  pvMakeBase(); pvRender();
+}
+// fond : la photo en niveaux de gris, ou une scène neutre si aucune image
+function pvMakeBase(){
+  const b = pvBase.getContext("2d"); b.clearRect(0, 0, pvW, pvH);
+  if (PV.img) { b.filter = "grayscale(1)"; b.drawImage(PV.img, 0, 0, pvW, pvH); b.filter = "none"; return; }
+  const g = b.createLinearGradient(0, 0, 0, pvH); g.addColorStop(0, "#6b6b6b"); g.addColorStop(.62, "#8a8a8a"); g.addColorStop(.63, "#b5b5b5"); g.addColorStop(1, "#d0d0d0");
+  b.fillStyle = g; b.fillRect(0, 0, pvW, pvH);
+  b.fillStyle = "rgba(0,0,0,.08)"; for (let x = 0; x < pvW; x += pvW / 16) b.fillRect(Math.round(x), 0, 1, pvH * .62);
+}
+function pvSchedule(){ if ($("prevWin").hidden || pvRaf) return; pvRaf = requestAnimationFrame(() => { pvRaf = 0; pvRender(); }); }
+
+// couleur émise par un spot pour une case
+function pvLightOf(sp, c){
+  if (!c) return null;
+  const nn = spotNotes(sp), k = nn[0] != null ? c.d / 255 : 1;
+  const rgb = hasRGB(sp) ? [c.r, c.g, c.b] : [255, 238, 205];
+  if (k <= 0 || rgb[0] + rgb[1] + rgb[2] === 0) return null;
+  return {rgb, k};
+}
+const pvRGBA = (rgb, a) => `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${Math.max(0, Math.min(1, a))})`;
+function pvDrawBeam(g, P, L){
+  const k = L.k * (P.gain ?? 1), W = pvW, H = pvH, rgb = L.rgb;
+  if (P.type === "omni") {
+    const cx = P.sx * W, cy = P.sy * H, r = Math.max(4, (P.r ?? .15) * Math.max(W, H));
+    const gr = g.createRadialGradient(cx, cy, 0, cx, cy, r);
+    gr.addColorStop(0, pvRGBA(rgb, .95 * k)); gr.addColorStop(.35, pvRGBA(rgb, .5 * k)); gr.addColorStop(1, pvRGBA(rgb, 0));
+    g.fillStyle = gr; g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.fill(); return;
+  }
+  const sx = P.sx * W, sy = P.sy * H, tx = P.tx * W, ty = P.ty * H, dx = tx - sx, dy = ty - sy, len = Math.hypot(dx, dy) || 1;
+  const nx = -dy / len, ny = dx / len, w = len * Math.tan((P.ang ?? 18) * Math.PI / 360) + 2;
+  const lg = g.createLinearGradient(sx, sy, tx, ty);
+  lg.addColorStop(0, pvRGBA(rgb, .72 * k)); lg.addColorStop(.8, pvRGBA(rgb, .3 * k)); lg.addColorStop(1, pvRGBA(rgb, .06 * k));
+  g.fillStyle = lg; g.beginPath(); g.moveTo(sx + nx * 1.5, sy + ny * 1.5); g.lineTo(tx + nx * w, ty + ny * w); g.lineTo(tx - nx * w, ty - ny * w); g.lineTo(sx - nx * 1.5, sy - ny * 1.5); g.closePath(); g.fill();
+  // tache de lumière à l'impact
+  const pr = w * 1.25, pg = g.createRadialGradient(tx, ty, 0, tx, ty, pr);
+  pg.addColorStop(0, pvRGBA(rgb, .95 * k)); pg.addColorStop(.6, pvRGBA(rgb, .45 * k)); pg.addColorStop(1, pvRGBA(rgb, 0));
+  g.fillStyle = pg; g.beginPath(); g.arc(tx, ty, pr, 0, Math.PI * 2); g.fill();
+  // source
+  const sr = Math.max(3, w * .12), sg = g.createRadialGradient(sx, sy, 0, sx, sy, sr * 2.5);
+  sg.addColorStop(0, pvRGBA([255, 255, 255], .9 * Math.min(1, k))); sg.addColorStop(.3, pvRGBA(rgb, .9 * k)); sg.addColorStop(1, pvRGBA(rgb, 0));
+  g.fillStyle = sg; g.beginPath(); g.arc(sx, sy, sr * 2.5, 0, Math.PI * 2); g.fill();
+}
+function pvRender(){
+  if ($("prevWin").hidden || !pvW) return;
+  const step = Math.min(totalSteps() - 1, Math.floor(S.pos / stepSec() + 1e-9));
+  const lg = pvLight.getContext("2d"); lg.globalCompositeOperation = "source-over"; lg.fillStyle = "#000"; lg.fillRect(0, 0, pvW, pvH);
+  lg.globalCompositeOperation = "lighter";
+  let lit = 0, placed = 0;
+  for (const sp of S.spots) { const P = PV.spots[sp.i]; if (!P || !sp.enabled) continue; placed++;
+    const L = pvLightOf(sp, S.cells[sp.i][step]); if (L) { pvDrawBeam(lg, P, L); lit++; } }
+  // photo éclairée = photo × lumière, + ambiance, + halo du faisceau dans l'air
+  const t = pvTmp.getContext("2d"); t.globalCompositeOperation = "source-over"; t.drawImage(pvLight, 0, 0);
+  t.globalCompositeOperation = "multiply"; t.drawImage(pvBase, 0, 0);
+  pcx.globalCompositeOperation = "source-over"; pcx.fillStyle = "#000"; pcx.fillRect(0, 0, pvW, pvH);
+  pcx.globalAlpha = PV.ambient; pcx.drawImage(pvBase, 0, 0); pcx.globalAlpha = 1;
+  pcx.globalCompositeOperation = "lighter"; pcx.drawImage(pvTmp, 0, 0); pcx.drawImage(pvTmp, 0, 0);
+  pcx.globalAlpha = PV.haze; pcx.drawImage(pvLight, 0, 0); pcx.globalAlpha = 1;
+  pcx.globalCompositeOperation = "source-over";
+  if (PV.edit) pvDrawHandles();
+  $("prevInfo").textContent = placed ? `${lit}/${placed} spots allumés` : "aucun spot placé";
+}
+function pvHandles(i){ const P = PV.spots[i]; if (!P) return [];
+  if (P.type === "omni") { const r = (P.r ?? .15) * Math.max(pvW, pvH); return [{k:"c", x:P.sx * pvW, y:P.sy * pvH}, {k:"r", x:P.sx * pvW + r, y:P.sy * pvH}]; }
+  return [{k:"s", x:P.sx * pvW, y:P.sy * pvH}, {k:"t", x:P.tx * pvW, y:P.ty * pvH}]; }
+function pvDrawHandles(){
+  const dpr = window.devicePixelRatio || 1;
+  pcx.lineWidth = 1.5 * dpr; pcx.font = `600 ${12 * dpr}px ${css("--f-body")}`; pcx.textBaseline = "bottom";
+  for (const sp of S.spots) { const P = PV.spots[sp.i]; if (!P || !sp.enabled) continue;
+    const hs = pvHandles(sp.i), sel = PV.sel === sp.i;
+    pcx.strokeStyle = sel ? COL.accent : "rgba(255,255,255,.6)"; pcx.setLineDash(sel ? [] : [4 * dpr, 4 * dpr]);
+    pcx.beginPath(); pcx.moveTo(hs[0].x, hs[0].y); pcx.lineTo(hs[1].x, hs[1].y); pcx.stroke();
+    if (P.type === "omni") { pcx.beginPath(); pcx.arc(hs[0].x, hs[0].y, hs[1].x - hs[0].x, 0, Math.PI * 2); pcx.stroke(); }
+    pcx.setLineDash([]);
+    for (const h of hs) { pcx.fillStyle = sel ? COL.accent : "#fff"; pcx.beginPath(); pcx.arc(h.x, h.y, (h.k === "s" || h.k === "c" ? 6 : 4.5) * dpr, 0, Math.PI * 2); pcx.fill();
+      pcx.strokeStyle = "#000"; pcx.stroke(); }
+    pcx.fillStyle = sel ? COL.accent : "#fff"; pcx.fillText(sp.name, hs[0].x + 9 * dpr, hs[0].y < 22 * dpr ? hs[0].y + 20 * dpr : hs[0].y - 6 * dpr);
+  }
+}
+function pvFillSpots(){
+  const sel = $("iPrevSpot"), cur = PV.sel; sel.textContent = "";
+  for (const sp of S.spots) { if (!sp.enabled) continue; const o = document.createElement("option"); o.value = sp.i; o.textContent = (PV.spots[sp.i] ? "● " : "○ ") + sp.name; sel.append(o); }
+  if (cur != null && S.spots[cur] && S.spots[cur].enabled) sel.value = cur; else { const f = S.spots.find(x => x.enabled); PV.sel = f ? f.i : null; if (f) sel.value = f.i; }
+}
+function pvSyncTools(){
+  const P = PV.spots[PV.sel], sp = S.spots[PV.sel];
+  const type = P ? P.type : (PV.newType || "dir");
+  $("pvDir").classList.toggle("on", type !== "omni"); $("pvOmni").classList.toggle("on", type === "omni");
+  $("pvAngG").hidden = type === "omni";
+  $("iPrevAng").value = P ? P.ang ?? 18 : 18; $("pvAngV").textContent = $("iPrevAng").value + "°";
+  $("iPrevGain").value = Math.round((P ? P.gain ?? 1 : 1) * 100); $("pvGainV").textContent = $("iPrevGain").value + " %";
+  $("iPrevAmb").value = Math.round(PV.ambient * 100); $("iPrevHaze").value = Math.round(PV.haze * 100);
+  $("bPrevDel").disabled = !P;
+  $("prevHint").textContent = !sp ? "Aucun spot actif dans la config." : P ? `${sp.name} : déplacez les poignées, ou cliquez-glissez ailleurs pour le replacer.`
+    : type === "omni" ? `${sp.name} : cliquez le centre puis glissez pour régler le rayon.` : `${sp.name} : cliquez la source du faisceau puis glissez jusqu'à la zone éclairée.`;
+}
+$("iPrevSpot").onchange = () => { PV.sel = +$("iPrevSpot").value; pvSyncTools(); pvRender(); };
+const pvSetType = t => { const P = PV.spots[PV.sel]; PV.newType = t;
+  if (P && P.type !== t) { if (t === "omni") { P.type = "omni"; P.r = P.r ?? Math.max(.04, Math.hypot(P.tx - P.sx, P.ty - P.sy) / 3); }
+    else { P.type = "dir"; P.tx = P.tx ?? P.sx; P.ty = P.ty ?? Math.min(1, P.sy + .3); P.ang = P.ang ?? 18; } pvChanged(); }
+  pvSyncTools(); pvRender(); };
+$("pvDir").onclick = () => pvSetType("dir");
+$("pvOmni").onclick = () => pvSetType("omni");
+$("iPrevAng").oninput = () => { const P = PV.spots[PV.sel]; if (P) { P.ang = +$("iPrevAng").value; pvChanged(); } $("pvAngV").textContent = $("iPrevAng").value + "°"; pvRender(); };
+$("iPrevGain").oninput = () => { const P = PV.spots[PV.sel]; if (P) { P.gain = $("iPrevGain").value / 100; pvChanged(); } $("pvGainV").textContent = $("iPrevGain").value + " %"; pvRender(); };
+$("iPrevAmb").oninput = () => { PV.ambient = $("iPrevAmb").value / 100; pvChanged(); pvRender(); };
+$("iPrevHaze").oninput = () => { PV.haze = $("iPrevHaze").value / 100; pvChanged(); pvRender(); };
+$("bPrevDel").onclick = () => { delete PV.spots[PV.sel]; pvChanged(); pvFillSpots(); pvSyncTools(); pvRender(); };
+$("bPrevImgDel").onclick = () => { PV.img = null; PV.imgURL = null; idbPut("previewImg", null); pvChanged(); pvLayout(); };
+$("fPrevImg").onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+  try { await pvSetImage(await new Promise((ok, ko) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = ko; r.readAsDataURL(f); }), true);
+    toast("Image de fond chargée (convertie en noir et blanc)."); }
+  catch (_) { toast("Image illisible.", true); }
+};
+// image réduite (1600 px max) et convertie en niveaux de gris, gardée en JPEG dans le projet
+async function pvSetImage(url, convert){
+  const im = await new Promise((ok, ko) => { const i = new Image(); i.onload = () => ok(i); i.onerror = ko; i.src = url; });
+  if (convert) {
+    const sc = Math.min(1, 1600 / Math.max(im.width, im.height)), c = document.createElement("canvas");
+    c.width = Math.round(im.width * sc); c.height = Math.round(im.height * sc);
+    const g = c.getContext("2d"); g.filter = "grayscale(1)"; g.drawImage(im, 0, 0, c.width, c.height);
+    url = c.toDataURL("image/jpeg", .85);
+    return pvSetImage(url, false);
+  }
+  PV.img = im; PV.imgURL = url; idbPut("previewImg", url); pvChanged(); pvLayout();
+}
+function pvChanged(){ autosave(); }
+
+// édition à la souris
+function pvPt(e){ const r = pcv.getBoundingClientRect(), dpr = pvW / r.width; return {x: (e.clientX - r.left) * dpr, y: (e.clientY - r.top) * dpr}; }
+pcv.addEventListener("pointerdown", e => {
+  if (!PV.edit) return;
+  const p = pvPt(e), dpr = window.devicePixelRatio || 1;
+  // poignée existante ?
+  for (const sp of S.spots) { if (!sp.enabled || !PV.spots[sp.i]) continue;
+    for (const h of pvHandles(sp.i)) if (Math.hypot(h.x - p.x, h.y - p.y) < 10 * dpr) {
+      PV.sel = sp.i; $("iPrevSpot").value = sp.i; pvDrag = {i: sp.i, k: h.k, p0: p, P0: {...PV.spots[sp.i]}};
+      pcv.setPointerCapture(e.pointerId); pvSyncTools(); pvRender(); return; } }
+  if (PV.sel == null) return;
+  const type = PV.spots[PV.sel] ? PV.spots[PV.sel].type : (PV.newType || "dir"), old = PV.spots[PV.sel] || {};
+  const nx = p.x / pvW, ny = p.y / pvH;
+  PV.spots[PV.sel] = type === "omni" ? {type, sx: nx, sy: ny, r: .02, gain: old.gain ?? 1} : {type, sx: nx, sy: ny, tx: nx, ty: ny, ang: old.ang ?? 18, gain: old.gain ?? 1};
+  PV.spots[PV.sel].name = S.spots[PV.sel].name;
+  pvDrag = {i: PV.sel, k: type === "omni" ? "r" : "t", fresh: true};
+  pcv.setPointerCapture(e.pointerId); pvFillSpots(); pvSyncTools(); pvRender();
+});
+pcv.addEventListener("pointermove", e => {
+  if (!PV.edit) { pcv.style.cursor = ""; return; }
+  const p = pvPt(e);
+  if (!pvDrag) { const dpr = window.devicePixelRatio || 1; let over = false;
+    for (const sp of S.spots) if (sp.enabled && PV.spots[sp.i]) for (const h of pvHandles(sp.i)) if (Math.hypot(h.x - p.x, h.y - p.y) < 10 * dpr) over = true;
+    pcv.style.cursor = over ? "move" : "crosshair"; return; }
+  const P = PV.spots[pvDrag.i], nx = Math.max(0, Math.min(1, p.x / pvW)), ny = Math.max(0, Math.min(1, p.y / pvH));
+  if (pvDrag.k === "s") { P.sx = nx; P.sy = ny; }
+  else if (pvDrag.k === "t") { P.tx = nx; P.ty = ny; }
+  else if (pvDrag.k === "c") { P.sx = nx; P.sy = ny; }
+  else if (pvDrag.k === "r") { P.r = Math.max(.01, Math.hypot(p.x - P.sx * pvW, p.y - P.sy * pvH) / Math.max(pvW, pvH)); }
+  pvRender();
+});
+pcv.addEventListener("pointerup", () => { if (pvDrag) { pvDrag = null; pvChanged(); pvSyncTools(); } });
+
+function pvToJSON(withImg){ return {ambient: PV.ambient, haze: PV.haze, spots: PV.spots, image: withImg ? PV.imgURL : undefined}; }
+async function pvFromJSON(o){
+  o = o || {}; PV.ambient = o.ambient ?? .3; PV.haze = o.haze ?? .35; PV.spots = o.spots || {};
+  // les placements suivent le nom du spot si l'ordre de la config a changé
+  for (const [k, P] of Object.entries({...PV.spots})) if (P && P.name) { const sp = S.spots.find(x => x.name === P.name);
+    if (sp && sp.i !== +k) { delete PV.spots[k]; PV.spots[sp.i] = P; } }
+  PV.sel = null;
+  if (o.image) await pvSetImage(o.image, false).catch(() => {});
+  else if (o.image === null) { PV.img = null; PV.imgURL = null; }
+  pvFillSpots(); pvSyncTools(); pvLayout();
+}
+
+/* ---------- Fenêtre Configuration ---------- */
+function syncLock(){
+  const L = !!S.audioLock;
+  ["iOff", "iRate"].forEach(id => $(id).disabled = L);
+  document.querySelectorAll("[data-nudge]").forEach(b => b.disabled = L);
+  $("audioLockNote").hidden = !L;
+}
+function updSummary(){
+  const parts = [S.cfgName || "config intégrée", S.wav ? S.wavName : "pas d'audio", `${S.bpm} BPM ${S.num}/${S.den}`];
+  if (typeof midiOut !== "undefined" && midiOut) parts.push(`MIDI → ${midiOut.name} (canal ${liveCh() + 1})`);
+  $("bConfig").title = "Configuration actuelle : " + parts.join(" · ");
+}
+function openConfig(){ $("cfgModal").hidden = false; $("bCfgClose").focus(); }
+function closeConfig(){ $("cfgModal").hidden = true; $("bConfig").focus(); updSummary(); }
+$("bConfig").onclick = openConfig;
+$("bHelp").onclick = () => { $("helpModal").hidden = false; $("bHelpClose").focus(); };
+const closeHelp = () => { $("helpModal").hidden = true; $("bHelp").focus(); };
+$("bHelpClose").onclick = closeHelp;
+$("helpModal").addEventListener("pointerdown", e => { if (e.target === $("helpModal")) closeHelp(); });
+$("bCfgClose").onclick = closeConfig;
+$("cfgModal").addEventListener("pointerdown", e => { if (e.target === $("cfgModal")) closeConfig(); });
+
+document.addEventListener("keydown", e => {
+  if (!$("cfgModal").hidden) { if (e.key === "Escape") { e.preventDefault(); closeConfig(); } return; }
+  if (!$("helpModal").hidden) { if (e.key === "Escape") { e.preventDefault(); closeHelp(); } return; }
+  const typing = /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName) && document.activeElement.type !== "range" && document.activeElement.type !== "checkbox";
+  if (typing) return;
+  const mod = e.ctrlKey || e.metaKey;
+  if (e.code === "Space") { e.preventDefault(); S.playing ? stop() : play(); }
+  else if (mod && e.key.toLowerCase() === "z") { e.preventDefault(); doUndo(); }
+  else if (mod && e.key.toLowerCase() === "c") { e.preventDefault(); copySel(false); }
+  else if (mod && e.key.toLowerCase() === "x") { e.preventDefault(); copySel(true); }
+  else if (mod && e.key.toLowerCase() === "v") { e.preventDefault(); pasteClip(); }
+  else if (mod && e.key.toLowerCase() === "d") { e.preventDefault(); duplicateSel(); }
+  else if (mod && e.key.toLowerCase() === "a") { e.preventDefault(); setTool("select"); S.sel = {s0:0, s1:totalSteps() - 1, l0:0, l1:visSpots().length - 1}; draw(); }
+  else if (S.sel && e.key.startsWith("Arrow")) { e.preventDefault(); const big = e.shiftKey ? Math.max(1, Math.round(4 / S.den / stepQ())) : 1;
+    nudgeSel(e.key === "ArrowLeft" ? -big : e.key === "ArrowRight" ? big : 0, e.key === "ArrowUp" ? -1 : e.key === "ArrowDown" ? 1 : 0); }
+  else if (e.key === "Delete" || e.key === "Backspace") { if (S.sel) { e.preventDefault(); deleteSel(); } }
+  else if (e.key === "Escape") { S.sel = null; draw(); }
+  else if (e.key === "Home") { seek(0); sc.scrollLeft = 0; }
+  else if (!mod && e.key.toLowerCase() === "b") setTool("paint");
+  else if (!mod && e.key.toLowerCase() === "e") setTool("erase");
+  else if (!mod && e.key.toLowerCase() === "s") setTool("select");
+  else if (!mod && (e.key.toLowerCase() === "i" || e.key === "?")) setTool("info");
+});
+
+/* ---------- Démarrage ---------- */
+readColors();
+let restored = false;
+try { const raw = localStorage.getItem(STORE); if (raw) { loadProject(JSON.parse(raw)); restored = true; } } catch (_) {}
+if (!restored) applyConfig(DEFAULT_CONFIG, "");
+fillLiveCh();
+rebuild();
+(async () => {
+  await pvFromJSON(restored ? S._pendingPreview : {});
+  const im = await idbGet("previewImg"); if (im) await pvSetImage(im, false).catch(() => {});
+  try { if (localStorage.getItem(STORE + ".prevOpen") === "1") pvOpen(); } catch (_) {}
+})();
+if (document.fonts) document.fonts.ready.then(draw);
+if (restored && S.wavName) restoreCachedWav().then(ok => toast(ok ? `Session précédente restaurée avec « ${S.wavName} ».` : `Session précédente restaurée. Importez le WAV « ${S.wavName} ».`));
+</script>
+</body>
+</html>
